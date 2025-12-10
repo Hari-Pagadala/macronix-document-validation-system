@@ -11,17 +11,25 @@ import {
   Paper,
   CircularProgress,
   Alert,
-  Divider
+  Divider,
+  TextField
 } from '@mui/material';
 import {
   Close as CloseIcon
 } from '@mui/icons-material';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 
-const ViewDetailsModal = ({ open, onClose, recordId }) => {
+const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
+  const { token } = useAuth();
   const [record, setRecord] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [reverting, setReverting] = useState(false);
   const [error, setError] = useState('');
+  const [stopReason, setStopReason] = useState('');
+  const [showStopConfirm, setShowStopConfirm] = useState(false);
+  const [showRevertConfirm, setShowRevertConfirm] = useState(false);
 
   useEffect(() => {
     if (open && recordId) {
@@ -33,13 +41,72 @@ const ViewDetailsModal = ({ open, onClose, recordId }) => {
     try {
       setLoading(true);
       setError('');
-      const response = await axios.get(`http://localhost:5000/api/records/${recordId}`);
+      const response = await axios.get(`http://localhost:5000/api/records/${recordId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       setRecord(response.data.record);
     } catch (err) {
       setError('Failed to load record details');
       console.error('Error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStopCase = async () => {
+    try {
+      setStopping(true);
+      const response = await axios.put(
+        `http://localhost:5000/api/records/${recordId}/stop`,
+        { reason: stopReason },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      if (response.data.success) {
+        setRecord(response.data.record);
+        setShowStopConfirm(false);
+        setStopReason('');
+        if (onStopSuccess) {
+          onStopSuccess();
+        }
+      }
+    } catch (err) {
+      setError('Failed to stop case: ' + (err.response?.data?.message || err.message));
+      console.error('Error stopping case:', err);
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  const handleRevertCase = async () => {
+    try {
+      setReverting(true);
+      const response = await axios.put(
+        `http://localhost:5000/api/records/${recordId}/revert`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      if (response.data.success) {
+        setRecord(response.data.record);
+        setShowRevertConfirm(false);
+        if (onStopSuccess) {
+          onStopSuccess();
+        }
+      }
+    } catch (err) {
+      setError('Failed to revert case: ' + (err.response?.data?.message || err.message));
+      console.error('Error reverting case:', err);
+    } finally {
+      setReverting(false);
     }
   };
 
@@ -207,7 +274,39 @@ const ViewDetailsModal = ({ open, onClose, recordId }) => {
         )}
       </DialogContent>
 
-      <DialogActions sx={{ p: 2, background: '#f9fafb' }}>
+      <DialogActions sx={{ p: 2, background: '#f9fafb', justifyContent: 'space-between' }}>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          {record?.status !== 'stopped' && (
+            <Button 
+              onClick={() => setShowStopConfirm(true)}
+              variant="contained"
+              color="error"
+              disabled={stopping}
+              sx={{
+                '&:hover': {
+                  background: '#d32f2f'
+                }
+              }}
+            >
+              Stop Case
+            </Button>
+          )}
+          {record?.status === 'stopped' && (
+            <Button 
+              onClick={() => setShowRevertConfirm(true)}
+              variant="contained"
+              color="success"
+              disabled={reverting}
+              sx={{
+                '&:hover': {
+                  background: '#388e3c'
+                }
+              }}
+            >
+              Revert to Pending
+            </Button>
+          )}
+        </Box>
         <Button 
           onClick={onClose}
           variant="contained"
@@ -222,6 +321,84 @@ const ViewDetailsModal = ({ open, onClose, recordId }) => {
           Close
         </Button>
       </DialogActions>
+
+      {/* Stop Confirmation Dialog */}
+      <Dialog 
+        open={showStopConfirm}
+        onClose={() => setShowStopConfirm(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Stop Case</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              Are you sure you want to stop this case? This action cannot be undone.
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Reason for stopping (optional)"
+              value={stopReason}
+              onChange={(e) => setStopReason(e.target.value)}
+              variant="outlined"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setShowStopConfirm(false)}
+            disabled={stopping}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleStopCase}
+            variant="contained"
+            color="error"
+            disabled={stopping}
+          >
+            {stopping ? 'Stopping...' : 'Stop Case'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Revert Confirmation Dialog */}
+      <Dialog 
+        open={showRevertConfirm}
+        onClose={() => setShowRevertConfirm(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Revert Case to Pending</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              Are you sure you want to revert this stopped case back to Pending status? 
+            </Typography>
+            <Typography variant="body2" color="warning.main" sx={{ mb: 0 }}>
+              ⚠️ Current vendor and field officer assignments will be cleared.
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setShowRevertConfirm(false)}
+            disabled={reverting}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleRevertCase}
+            variant="contained"
+            color="success"
+            disabled={reverting}
+          >
+            {reverting ? 'Reverting...' : 'Revert to Pending'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 };

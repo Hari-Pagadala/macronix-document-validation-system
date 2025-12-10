@@ -317,13 +317,15 @@ exports.getDashboardStats = async (req, res) => {
         const assignedRecords = await Record.count({ where: { status: 'assigned' } });
         const submittedRecords = await Record.count({ where: { status: 'submitted' } });
         const approvedRecords = await Record.count({ where: { status: 'approved' } });
+        const stoppedRecords = await Record.count({ where: { status: 'stopped' } });
         
         console.log('Dashboard Stats:', {
             totalRecords,
             pendingRecords,
             assignedRecords,
             submittedRecords,
-            approvedRecords
+            approvedRecords,
+            stoppedRecords
         });
         
         res.json({
@@ -333,7 +335,8 @@ exports.getDashboardStats = async (req, res) => {
                 pendingRecords,
                 assignedRecords,
                 submittedRecords,
-                approvedRecords
+                approvedRecords,
+                stoppedRecords
             }
         });
     } catch (error) {
@@ -341,6 +344,86 @@ exports.getDashboardStats = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Server error fetching stats: ' + error.message
+        });
+    }
+};
+
+// Stop a record
+exports.stopRecord = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        const record = await Record.findByPk(id);
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Record not found'
+            });
+        }
+
+        // Update record status to stopped
+        await record.update({
+            status: 'stopped',
+            remarks: reason || record.remarks
+        });
+
+        res.json({
+            success: true,
+            message: 'Case stopped successfully',
+            record
+        });
+    } catch (error) {
+        console.error('Error stopping record:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error stopping case: ' + error.message
+        });
+    }
+};
+
+// Revert a stopped record back to pending
+exports.revertRecord = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const record = await Record.findByPk(id);
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Record not found'
+            });
+        }
+
+        if (record.status !== 'stopped') {
+            return res.status(400).json({
+                success: false,
+                message: 'Only stopped cases can be reverted'
+            });
+        }
+
+        // Update record status back to pending
+        await record.update({
+            status: 'pending',
+            // Clear assignment when reverting
+            assignedVendor: null,
+            assignedVendorName: null,
+            assignedFieldOfficer: null,
+            assignedFieldOfficerName: null,
+            assignedDate: null,
+            tatDueDate: null
+        });
+
+        res.json({
+            success: true,
+            message: 'Case reverted to Pending successfully',
+            record
+        });
+    } catch (error) {
+        console.error('Error reverting record:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error reverting case: ' + error.message
         });
     }
 };

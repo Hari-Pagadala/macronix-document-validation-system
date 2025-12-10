@@ -8,6 +8,8 @@ router.use(auth);
 router.post('/bulk-upload', recordController.bulkUpload);
 router.post('/manual', recordController.createManualRecord);
 router.get('/dashboard-stats', recordController.getDashboardStats);
+router.put('/:id/stop', recordController.stopRecord);
+router.put('/:id/revert', recordController.revertRecord);
 router.get('/', recordController.getAllRecords);
 router.get('/:id', recordController.getRecordById);
 router.put('/:id', recordController.updateRecord);
