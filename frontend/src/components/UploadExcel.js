@@ -88,6 +88,10 @@ const UploadExcel = ({ onSuccess }) => {
         const response = await axios.post('http://localhost:5000/api/records/bulk-upload', {
           records,
           fileName: file.name
+        }, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
         });
 
         setResult(response.data);
@@ -149,51 +153,60 @@ const UploadExcel = ({ onSuccess }) => {
 
           {result ? (
             <Box>
-              <Alert severity="success" sx={{ mb: 2 }}>
-                <strong>Upload Successful!</strong>
+              <Alert severity={result.success ? 'success' : 'warning'} sx={{ mb: 2 }}>
+                <strong>{result.success ? 'Upload Successful!' : 'Upload Completed with Issues'}</strong>
                 <br />
                 {result.message}
               </Alert>
-              
-              <Box sx={{ mb: 2 }}>
-                <Chip 
-                  icon={<CheckIcon />}
-                  label={`Batch: ${result.batchId}`}
-                  color="success"
-                  variant="outlined"
-                />
-              </Box>
-              
-              <Typography variant="subtitle2" gutterBottom>
-                Generated MACRONIX Reference Numbers:
-              </Typography>
-              
-              <Box sx={{ 
-                maxHeight: 150, 
-                overflow: 'auto', 
-                border: '1px solid #eee', 
-                borderRadius: 1,
-                p: 1,
-                mb: 2
-              }}>
-                {result.referenceNumbers?.slice(0, 10).map((ref, index) => (
-                  <Chip
-                    key={index}
-                    label={ref}
-                    size="small"
-                    sx={{ m: 0.5 }}
-                  />
-                ))}
-                {result.referenceNumbers?.length > 10 && (
-                  <Typography variant="caption" color="textSecondary">
-                    ... and {result.referenceNumbers.length - 10} more
+
+              {/* Success Summary */}
+              {result.results?.success?.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'success.main', mb: 1 }}>
+                    ✓ {result.results.success.length} Records Created Successfully
                   </Typography>
-                )}
-              </Box>
-              
-              {result.failedRecords?.length > 0 && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  {result.failedRecords.length} records failed. Check format.
+                  <Box sx={{ 
+                    maxHeight: 150, 
+                    overflow: 'auto', 
+                    border: '1px solid #4caf50', 
+                    borderRadius: 1,
+                    p: 1,
+                    mb: 2,
+                    bgcolor: 'success.light'
+                  }}>
+                    {result.results.success.slice(0, 10).map((item, index) => (
+                      <Chip
+                        key={index}
+                        icon={<CheckIcon />}
+                        label={`${item.caseNumber} → ${item.referenceNumber}`}
+                        size="small"
+                        color="success"
+                        variant="outlined"
+                        sx={{ m: 0.5 }}
+                      />
+                    ))}
+                    {result.results.success.length > 10 && (
+                      <Typography variant="caption" color="textSecondary" display="block">
+                        ... and {result.results.success.length - 10} more
+                      </Typography>
+                    )}
+                  </Box>
+                </Box>
+              )}
+
+              {/* Failed Summary */}
+              {result.results?.failed?.length > 0 && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1 }}>
+                    ✗ {result.results.failed.length} Records Failed
+                  </Typography>
+                  <Box sx={{ maxHeight: 120, overflow: 'auto' }}>
+                    {result.results.failed.map((item, index) => (
+                      <Typography key={index} variant="body2" sx={{ mb: 0.5 }}>
+                        Row {item.rowNumber}: {item.caseNumber} - {item.error}
+                      </Typography>
+                    ))}
+                  </Box>
                 </Alert>
               )}
             </Box>

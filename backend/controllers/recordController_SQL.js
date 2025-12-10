@@ -92,14 +92,102 @@ exports.createManualRecord = async (req, res) => {
 // Bulk upload
 exports.bulkUpload = async (req, res) => {
     try {
+        const { records } = req.body;
+
+        if (!records || !Array.isArray(records) || records.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No records provided'
+            });
+        }
+
+        const results = {
+            success: [],
+            failed: [],
+            totalRecords: records.length
+        };
+
+        // Process each record
+        for (let i = 0; i < records.length; i++) {
+            const record = records[i];
+            try {
+                // Validate required field
+                if (!record.caseNumber || record.caseNumber.toString().trim() === '') {
+                    results.failed.push({
+                        rowNumber: i + 2, // Row number in Excel (1-indexed + header)
+                        caseNumber: record.caseNumber,
+                        error: 'Case Number is required'
+                    });
+                    continue;
+                }
+
+                // Check if case number already exists
+                const existingCase = await Record.findOne({
+                    where: { caseNumber: record.caseNumber.toString().trim() }
+                });
+
+                if (existingCase) {
+                    results.failed.push({
+                        rowNumber: i + 2,
+                        caseNumber: record.caseNumber,
+                        error: 'Case Number already exists'
+                    });
+                    continue;
+                }
+
+                // Generate reference number
+                const referenceNumber = await generateReferenceNumber();
+
+                // Create full name
+                const firstName = (record.firstName || '').toString().trim();
+                const lastName = (record.lastName || '').toString().trim();
+                const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+
+                // Create the record
+                const newRecord = await Record.create({
+                    caseNumber: record.caseNumber.toString().trim(),
+                    referenceNumber,
+                    firstName,
+                    lastName,
+                    fullName: fullName || 'N/A',
+                    contactNumber: (record.contactNumber || '').toString().trim(),
+                    email: (record.email || '').toString().trim(),
+                    address: (record.address || '').toString().trim(),
+                    state: (record.state || '').toString().trim(),
+                    district: (record.district || '').toString().trim(),
+                    pincode: (record.pincode || '').toString().trim(),
+                    status: 'pending',
+                    uploadedDate: new Date()
+                });
+
+                results.success.push({
+                    rowNumber: i + 2,
+                    caseNumber: record.caseNumber,
+                    referenceNumber,
+                    message: 'Record created successfully'
+                });
+
+            } catch (error) {
+                console.error(`Error processing row ${i + 2}:`, error);
+                results.failed.push({
+                    rowNumber: i + 2,
+                    caseNumber: record.caseNumber,
+                    error: error.message || 'Unknown error'
+                });
+            }
+        }
+
         res.json({
-            success: true,
-            message: 'Bulk upload endpoint'
+            success: results.failed.length === 0,
+            message: `Upload completed: ${results.success.length} succeeded, ${results.failed.length} failed`,
+            results
         });
+
     } catch (error) {
+        console.error('Error in bulk upload:', error);
         res.status(500).json({
             success: false,
-            message: 'Server error'
+            message: 'Server error: ' + error.message
         });
     }
 };
