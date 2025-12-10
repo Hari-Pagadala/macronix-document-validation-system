@@ -42,7 +42,8 @@ const statusConfig = {
   in_progress: { color: 'primary', icon: <InProgressIcon />, label: 'IN PROGRESS' },
   submitted: { color: 'secondary', icon: <PendingIcon />, label: 'SUBMITTED' },
   approved: { color: 'success', icon: <ApprovedIcon />, label: 'APPROVED' },
-  rejected: { color: 'error', icon: <RejectedIcon />, label: 'REJECTED' }
+  rejected: { color: 'error', icon: <RejectedIcon />, label: 'REJECTED' },
+  stopped: { color: 'error', icon: <RejectedIcon />, label: 'STOPPED' }
 };
 
 const RecordsTable = ({ status = 'all' }) => {
@@ -75,6 +76,9 @@ const RecordsTable = ({ status = 'all' }) => {
           search: search,
           page: page + 1,
           limit: rowsPerPage
+        },
+        headers: {
+          'Authorization': `Bearer ${token}`
         }
       });
 
@@ -340,6 +344,7 @@ const RecordsTable = ({ status = 'all' }) => {
         open={viewModalOpen}
         onClose={() => setViewModalOpen(false)}
         recordId={viewRecordId}
+        onStopSuccess={fetchRecords}
       />
 
       {/* Edit Modal */}

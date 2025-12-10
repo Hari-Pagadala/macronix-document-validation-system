@@ -17,8 +17,10 @@ import {
   CircularProgress
 } from '@mui/material';
 import axios from 'axios';
+import { useAuth } from '../context/AuthContext';
 
 const EditCaseModal = ({ open, onClose, record, onUpdate }) => {
+  const { token } = useAuth();
   const [loading, setLoading] = useState(false);
   const [loadingVendors, setLoadingVendors] = useState(false);
   const [loadingOfficers, setLoadingOfficers] = useState(false);
@@ -81,7 +83,10 @@ const EditCaseModal = ({ open, onClose, record, onUpdate }) => {
     try {
       setLoadingVendors(true);
       const response = await axios.get('http://localhost:5000/api/vendors/active', {
-        timeout: 5000 // 5 second timeout
+        timeout: 5000,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       setVendors(response.data.vendors || []);
     } catch (error) {
@@ -96,7 +101,10 @@ const EditCaseModal = ({ open, onClose, record, onUpdate }) => {
     try {
       setLoadingOfficers(true);
       const response = await axios.get(`http://localhost:5000/api/field-officers/vendor/${vendorId}`, {
-        timeout: 5000 // 5 second timeout
+        timeout: 5000,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
       });
       setFieldOfficers(response.data.fieldOfficers || []);
     } catch (error) {
@@ -129,7 +137,15 @@ const EditCaseModal = ({ open, onClose, record, onUpdate }) => {
         assignedFieldOfficer: formData.assignedVendor ? formData.assignedFieldOfficer : ''
       };
 
-      const response = await axios.put(`http://localhost:5000/api/records/${record.id}`, updateData);
+      const response = await axios.put(
+        `http://localhost:5000/api/records/${record.id}`,
+        updateData,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
       
       // Show success message
       if (formData.assignedVendor && formData.assignedFieldOfficer) {

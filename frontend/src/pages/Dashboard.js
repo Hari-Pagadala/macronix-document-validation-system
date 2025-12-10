@@ -108,7 +108,7 @@ const Dashboard = () => {
     setSideNavOpen(false);
   };
 
-  const tabStatusMap = ['all', 'pending', 'assigned', 'submitted', 'approved'];
+  const tabStatusMap = ['all', 'pending', 'assigned', 'submitted', 'approved', 'stopped'];
 
   const renderContent = () => {
     switch (activeSection) {
@@ -182,6 +182,18 @@ const Dashboard = () => {
                     </CardContent>
                   </Card>
                 </Grid>
+                <Grid item xs={6} sm={4} md={2.4}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h5" align="center" color="error.main">
+                        {stats.stoppedRecords || 0}
+                      </Typography>
+                      <Typography variant="body2" align="center" color="text.secondary">
+                        Stopped
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
               </Grid>
             ) : (
               <Box display="flex" justifyContent="center" py={4}>
@@ -208,6 +220,7 @@ const Dashboard = () => {
                 <Tab label="Assigned" />
                 <Tab label="Submitted" />
                 <Tab label="Approved" />
+                <Tab label="Stopped" />
               </Tabs>
             </Paper>
 
