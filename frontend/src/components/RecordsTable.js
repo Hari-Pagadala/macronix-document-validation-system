@@ -119,7 +119,8 @@ const RecordsTable = ({ status = 'all' }) => {
 
   const handleEdit = () => {
     setEditModalOpen(true);
-    handleMenuClose();
+    // Close menu but keep selectedRecord available for EditCaseModal
+    setAnchorEl(null);
   };
 
   const handleView = () => {
@@ -351,7 +352,10 @@ const RecordsTable = ({ status = 'all' }) => {
       {selectedRecord && (
         <EditCaseModal
           open={editModalOpen}
-          onClose={() => setEditModalOpen(false)}
+          onClose={() => {
+            setEditModalOpen(false);
+            setSelectedRecord(null);
+          }}
           record={selectedRecord}
           onUpdate={handleUpdateSuccess}
         />
