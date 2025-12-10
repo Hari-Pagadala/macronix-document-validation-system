@@ -30,7 +30,7 @@ let vendorsCache = null;
 
 // Styled Select component for better dropdown appearance
 const StyledSelect = styled(Select)(({ theme }) => ({
-  width: '100%',
+  width: '200px',
   '& .MuiOutlinedInput-root': {
     width: '100%',
     '& fieldset': {
