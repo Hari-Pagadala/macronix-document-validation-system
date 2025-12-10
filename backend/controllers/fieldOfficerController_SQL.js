@@ -1,0 +1,232 @@
+const FieldOfficer = require('../models/FieldOfficer_SQL');
+const Vendor = require('../models/Vendor_SQL');
+
+// Create field officer
+exports.createFieldOfficer = async (req, res) => {
+    try {
+        const { name, email, phoneNumber, password, vendor } = req.body;
+        
+        // Validate vendor exists and is active
+        const vendorDoc = await Vendor.findByPk(vendor);
+        if (!vendorDoc) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vendor not found'
+            });
+        }
+        if (vendorDoc.status !== 'active') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot assign to inactive vendor'
+            });
+        }
+        
+        // Check if field officer already exists
+        const existingOfficer = await FieldOfficer.findOne({ where: { email } });
+        if (existingOfficer) {
+            return res.status(400).json({
+                success: false,
+                message: 'Field officer with this email already exists'
+            });
+        }
+        
+        const fieldOfficer = await FieldOfficer.create({
+            name,
+            email,
+            phoneNumber,
+            password,
+            vendor,
+            vendorName: vendorDoc.company
+        });
+        
+        res.status(201).json({
+            success: true,
+            message: 'Field officer created successfully',
+            fieldOfficer: {
+                id: fieldOfficer.id,
+                name: fieldOfficer.name,
+                email: fieldOfficer.email,
+                phoneNumber: fieldOfficer.phoneNumber,
+                vendor: fieldOfficer.vendor,
+                vendorName: fieldOfficer.vendorName,
+                status: fieldOfficer.status
+            }
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error creating field officer'
+        });
+    }
+};
+
+// Get all field officers
+exports.getAllFieldOfficers = async (req, res) => {
+    try {
+        const { status } = req.query;
+        
+        const where = {};
+        if (status) {
+            where.status = status;
+        }
+        
+        const fieldOfficers = await FieldOfficer.findAll({
+            where,
+            order: [['createdAt', 'DESC']],
+            attributes: { exclude: ['password'] }
+        });
+        
+        res.json({
+            success: true,
+            fieldOfficers
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error fetching field officers'
+        });
+    }
+};
+
+// Get field officers by vendor
+exports.getFieldOfficersByVendor = async (req, res) => {
+    try {
+        const { vendorId } = req.params;
+        
+        const fieldOfficers = await FieldOfficer.findAll({
+            where: {
+                vendor: vendorId,
+                status: 'active'
+            },
+            attributes: ['id', 'name']
+        });
+        
+        res.json({
+            success: true,
+            fieldOfficers
+        });
+        
+    } catch (error) {
+        console.error('Error fetching field officers by vendor:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error fetching field officers'
+        });
+    }
+};
+
+// Get field officer by ID
+exports.getFieldOfficerById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const fieldOfficer = await FieldOfficer.findByPk(id, {
+            attributes: { exclude: ['password'] }
+        });
+        
+        if (!fieldOfficer) {
+            return res.status(404).json({
+                success: false,
+                message: 'Field officer not found'
+            });
+        }
+        
+        res.json({
+            success: true,
+            fieldOfficer
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error fetching field officer'
+        });
+    }
+};
+
+// Update field officer
+exports.updateFieldOfficer = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const updateData = req.body;
+        
+        const fieldOfficer = await FieldOfficer.findByPk(id);
+        if (!fieldOfficer) {
+            return res.status(404).json({
+                success: false,
+                message: 'Field officer not found'
+            });
+        }
+        
+        // If changing vendor, validate new vendor
+        if (updateData.vendor && updateData.vendor !== fieldOfficer.vendor) {
+            const vendorDoc = await Vendor.findByPk(updateData.vendor);
+            if (!vendorDoc) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Vendor not found'
+                });
+            }
+            updateData.vendorName = vendorDoc.company;
+        }
+        
+        await fieldOfficer.update(updateData);
+        
+        res.json({
+            success: true,
+            message: 'Field officer updated successfully',
+            fieldOfficer: {
+                id: fieldOfficer.id,
+                name: fieldOfficer.name,
+                email: fieldOfficer.email,
+                phoneNumber: fieldOfficer.phoneNumber,
+                vendor: fieldOfficer.vendor,
+                vendorName: fieldOfficer.vendorName,
+                status: fieldOfficer.status
+            }
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error updating field officer'
+        });
+    }
+};
+
+// Toggle field officer status
+exports.toggleFieldOfficerStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const fieldOfficer = await FieldOfficer.findByPk(id);
+        if (!fieldOfficer) {
+            return res.status(404).json({
+                success: false,
+                message: 'Field officer not found'
+            });
+        }
+        
+        fieldOfficer.status = fieldOfficer.status === 'active' ? 'inactive' : 'active';
+        await fieldOfficer.save();
+        
+        res.json({
+            success: true,
+            message: `Field officer ${fieldOfficer.status === 'active' ? 'activated' : 'deactivated'} successfully`,
+            fieldOfficer: {
+                id: fieldOfficer.id,
+                name: fieldOfficer.name,
+                email: fieldOfficer.email,
+                status: fieldOfficer.status
+            }
+        });
+        
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Server error toggling field officer status'
+        });
+    }
+};
