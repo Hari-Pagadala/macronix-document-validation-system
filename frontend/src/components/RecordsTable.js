@@ -42,6 +42,7 @@ const statusConfig = {
   in_progress: { color: 'primary', icon: <InProgressIcon />, label: 'IN PROGRESS' },
   submitted: { color: 'secondary', icon: <PendingIcon />, label: 'SUBMITTED' },
   approved: { color: 'success', icon: <ApprovedIcon />, label: 'APPROVED' },
+  insufficient: { color: 'warning', icon: <WarningIcon />, label: 'INSUFFICIENT' },
   rejected: { color: 'error', icon: <RejectedIcon />, label: 'REJECTED' },
   stopped: { color: 'error', icon: <RejectedIcon />, label: 'STOPPED' }
 };
@@ -247,9 +248,6 @@ const RecordsTable = ({ status = 'all' }) => {
                       </TableCell>
                       <TableCell>
                         {displayName}
-                        <div style={{ fontSize: '0.75rem', color: '#666' }}>
-                          {[record.firstName, record.lastName].filter(Boolean).join(' ')}
-                        </div>
                       </TableCell>
                       <TableCell>
                         {displayContact}

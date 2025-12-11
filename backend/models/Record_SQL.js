@@ -38,7 +38,7 @@ const Record = sequelize.define('Record', {
         type: DataTypes.STRING
     },
     status: {
-        type: DataTypes.ENUM('pending', 'assigned', 'submitted', 'approved', 'rejected', 'stopped'),
+        type: DataTypes.ENUM('pending', 'assigned', 'submitted', 'approved', 'insufficient', 'rejected', 'stopped'),
         defaultValue: 'pending'
     },
     remarks: {
