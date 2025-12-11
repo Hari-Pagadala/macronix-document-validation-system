@@ -405,6 +405,8 @@ exports.getDashboardStats = async (req, res) => {
         const assignedRecords = await Record.count({ where: { status: 'assigned' } });
         const submittedRecords = await Record.count({ where: { status: 'submitted' } });
         const approvedRecords = await Record.count({ where: { status: 'approved' } });
+        const insufficientRecords = await Record.count({ where: { status: 'insufficient' } });
+        const rejectedRecords = await Record.count({ where: { status: 'rejected' } });
         const stoppedRecords = await Record.count({ where: { status: 'stopped' } });
         
         console.log('Dashboard Stats:', {
@@ -413,6 +415,8 @@ exports.getDashboardStats = async (req, res) => {
             assignedRecords,
             submittedRecords,
             approvedRecords,
+            insufficientRecords,
+            rejectedRecords,
             stoppedRecords
         });
         
@@ -424,6 +428,8 @@ exports.getDashboardStats = async (req, res) => {
                 assignedRecords,
                 submittedRecords,
                 approvedRecords,
+                insufficientRecords,
+                rejectedRecords,
                 stoppedRecords
             }
         });

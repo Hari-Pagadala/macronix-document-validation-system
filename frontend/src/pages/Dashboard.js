@@ -108,7 +108,7 @@ const Dashboard = () => {
     setSideNavOpen(false);
   };
 
-  const tabStatusMap = ['all', 'pending', 'assigned', 'submitted', 'approved', 'stopped'];
+  const tabStatusMap = ['all', 'pending', 'assigned', 'submitted', 'approved', 'insufficient', 'rejected', 'stopped'];
 
   const renderContent = () => {
     switch (activeSection) {
@@ -182,7 +182,31 @@ const Dashboard = () => {
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={6} sm={4} md={2.4}>
+                <Grid item xs={6} sm={4} md={2}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h5" align="center" sx={{ color: '#ff9800' }}>
+                        {stats.insufficientRecords || 0}
+                      </Typography>
+                      <Typography variant="body2" align="center" color="text.secondary">
+                        Insufficient
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={6} sm={4} md={2}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h5" align="center" color="error.main">
+                        {stats.rejectedRecords || 0}
+                      </Typography>
+                      <Typography variant="body2" align="center" color="text.secondary">
+                        Rejected
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={6} sm={4} md={2}>
                   <Card>
                     <CardContent>
                       <Typography variant="h5" align="center" color="error.main">
@@ -220,6 +244,8 @@ const Dashboard = () => {
                 <Tab label="Assigned" />
                 <Tab label="Submitted" />
                 <Tab label="Approved" />
+                <Tab label="Insufficient" />
+                <Tab label="Rejected" />
                 <Tab label="Stopped" />
               </Tabs>
             </Paper>

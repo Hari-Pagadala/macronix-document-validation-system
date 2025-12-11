@@ -90,6 +90,7 @@ const recordSchema = new mongoose.Schema({
             'in_progress',  // Field officer working
             'submitted',    // Field officer completed
             'approved',     // Admin approved
+            'insufficient', // Needs more info
             'rejected'      // Admin rejected
         ],
         default: 'pending'
