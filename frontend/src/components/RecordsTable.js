@@ -38,6 +38,7 @@ import { useAuth } from '../context/AuthContext';
 
 const statusConfig = {
   pending: { color: 'warning', icon: <PendingIcon />, label: 'PENDING' },
+  vendor_assigned: { color: 'info', icon: <AssignIcon />, label: 'VENDOR ASSIGNED' },
   assigned: { color: 'info', icon: <AssignIcon />, label: 'ASSIGNED' },
   in_progress: { color: 'primary', icon: <InProgressIcon />, label: 'IN PROGRESS' },
   submitted: { color: 'secondary', icon: <PendingIcon />, label: 'SUBMITTED' },
