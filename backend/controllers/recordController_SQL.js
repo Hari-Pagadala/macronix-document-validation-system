@@ -320,6 +320,14 @@ exports.updateRecord = async (req, res) => {
         // Remove fields that shouldn't be updated directly
         const { createdAt, updatedAt, referenceNumber, ...safeUpdateData } = updateData;
         
+        // Convert empty strings to null for UUID fields
+        if (safeUpdateData.assignedVendor === '' || safeUpdateData.assignedVendor === null) {
+            safeUpdateData.assignedVendor = null;
+        }
+        if (safeUpdateData.assignedFieldOfficer === '' || safeUpdateData.assignedFieldOfficer === null) {
+            safeUpdateData.assignedFieldOfficer = null;
+        }
+        
         // Fetch vendor name if vendor ID is provided
         if (safeUpdateData.assignedVendor) {
             const vendor = await Vendor.findByPk(safeUpdateData.assignedVendor);
@@ -340,23 +348,33 @@ exports.updateRecord = async (req, res) => {
             safeUpdateData.assignedFieldOfficerName = null;
         }
         
-        // Auto-update status and TAT when vendor and field officer are assigned
-        if (safeUpdateData.assignedVendor && safeUpdateData.assignedFieldOfficer) {
-            // Change status to 'assigned' only if it's currently 'pending'
-            if (record.status === 'pending') {
-                safeUpdateData.status = 'assigned';
+        // Auto-update status based on assignments
+        if (safeUpdateData.assignedVendor) {
+            // If only vendor is assigned
+            if (!safeUpdateData.assignedFieldOfficer) {
+                if (record.status === 'pending') {
+                    safeUpdateData.status = 'vendor_assigned';
+                }
+            } else {
+                // If both vendor and field officer are assigned
+                if (record.status === 'pending' || record.status === 'vendor_assigned') {
+                    safeUpdateData.status = 'assigned';
+                }
+                
+                // Set assignment date to now if not already set
+                if (!safeUpdateData.assignedDate) {
+                    safeUpdateData.assignedDate = new Date();
+                }
+                
+                // Calculate TAT due date (7 days from assignment date)
+                const assignmentDate = safeUpdateData.assignedDate ? new Date(safeUpdateData.assignedDate) : new Date();
+                const tatDueDate = new Date(assignmentDate);
+                tatDueDate.setDate(tatDueDate.getDate() + 7);
+                safeUpdateData.tatDueDate = tatDueDate;
             }
-            
-            // Set assignment date to now if not already set
-            if (!safeUpdateData.assignedDate) {
-                safeUpdateData.assignedDate = new Date();
-            }
-            
-            // Calculate TAT due date (7 days from assignment date)
-            const assignmentDate = safeUpdateData.assignedDate ? new Date(safeUpdateData.assignedDate) : new Date();
-            const tatDueDate = new Date(assignmentDate);
-            tatDueDate.setDate(tatDueDate.getDate() + 7);
-            safeUpdateData.tatDueDate = tatDueDate;
+        } else if (!safeUpdateData.assignedVendor && record.assignedVendor) {
+            // If vendor is being removed, revert to pending
+            safeUpdateData.status = 'pending';
         }
         
         await record.update(safeUpdateData);
@@ -402,6 +420,7 @@ exports.getDashboardStats = async (req, res) => {
     try {
         const totalRecords = await Record.count();
         const pendingRecords = await Record.count({ where: { status: 'pending' } });
+        const vendorAssignedRecords = await Record.count({ where: { status: 'vendor_assigned' } });
         const assignedRecords = await Record.count({ where: { status: 'assigned' } });
         const submittedRecords = await Record.count({ where: { status: 'submitted' } });
         const approvedRecords = await Record.count({ where: { status: 'approved' } });
@@ -412,6 +431,7 @@ exports.getDashboardStats = async (req, res) => {
         console.log('Dashboard Stats:', {
             totalRecords,
             pendingRecords,
+            vendorAssignedRecords,
             assignedRecords,
             submittedRecords,
             approvedRecords,
@@ -425,6 +445,7 @@ exports.getDashboardStats = async (req, res) => {
             stats: {
                 totalRecords,
                 pendingRecords,
+                vendorAssignedRecords,
                 assignedRecords,
                 submittedRecords,
                 approvedRecords,

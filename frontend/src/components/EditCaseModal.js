@@ -186,7 +186,7 @@ const EditCaseModal = ({ open, onClose, record, onUpdate }) => {
     try {
       const updateData = {
         ...formData,
-        assignedFieldOfficer: formData.assignedVendor ? formData.assignedFieldOfficer : ''
+        assignedFieldOfficer: formData.assignedFieldOfficer || null
       };
 
       await axios.put(
@@ -199,8 +199,12 @@ const EditCaseModal = ({ open, onClose, record, onUpdate }) => {
         }
       );
       
-      if (formData.assignedVendor && formData.assignedFieldOfficer) {
-        setSuccess('Case assigned successfully! Status changed to "Assigned" and TAT created for 7 days.');
+      if (formData.assignedVendor) {
+        if (formData.assignedFieldOfficer) {
+          setSuccess('Case assigned successfully! Status changed to "Assigned" and TAT created for 7 days.');
+        } else {
+          setSuccess('Case assigned to Vendor! Status changed to "Vendor Assigned".');
+        }
         setTimeout(() => {
           onUpdate();
           onClose();

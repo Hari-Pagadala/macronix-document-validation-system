@@ -108,7 +108,7 @@ const Dashboard = () => {
     setSideNavOpen(false);
   };
 
-  const tabStatusMap = ['all', 'pending', 'assigned', 'submitted', 'approved', 'insufficient', 'rejected', 'stopped'];
+  const tabStatusMap = ['all', 'pending', 'vendor_assigned', 'assigned', 'submitted', 'approved', 'insufficient', 'rejected', 'stopped'];
 
   const renderContent = () => {
     switch (activeSection) {
@@ -142,6 +142,18 @@ const Dashboard = () => {
                       </Typography>
                       <Typography variant="body2" align="center" color="text.secondary">
                         Pending
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={6} sm={4} md={2.4}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h5" align="center" sx={{ color: '#2196f3' }}>
+                        {stats.vendorAssignedRecords || 0}
+                      </Typography>
+                      <Typography variant="body2" align="center" color="text.secondary">
+                        Vendor Assigned
                       </Typography>
                     </CardContent>
                   </Card>
@@ -241,6 +253,7 @@ const Dashboard = () => {
               >
                 <Tab label="All Cases" />
                 <Tab label="Pending" />
+                <Tab label="Vendor Assigned" />
                 <Tab label="Assigned" />
                 <Tab label="Submitted" />
                 <Tab label="Approved" />

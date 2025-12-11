@@ -85,13 +85,14 @@ const recordSchema = new mongoose.Schema({
     status: {
         type: String,
         enum: [
-            'pending',      // Just uploaded, not assigned
-            'assigned',     // Assigned to vendor
-            'in_progress',  // Field officer working
-            'submitted',    // Field officer completed
-            'approved',     // Admin approved
-            'insufficient', // Needs more info
-            'rejected'      // Admin rejected
+            'pending',           // Just uploaded, not assigned
+            'vendor_assigned',   // Assigned to vendor only
+            'assigned',          // Assigned to both vendor and field officer
+            'in_progress',       // Field officer working
+            'submitted',         // Field officer completed
+            'approved',          // Admin approved
+            'insufficient',      // Needs more info
+            'rejected'           // Admin rejected
         ],
         default: 'pending'
     },
