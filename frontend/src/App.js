@@ -9,6 +9,8 @@ import Dashboard from './pages/Dashboard';
 import ManualEntryPage from './pages/ManualEntryPage';
 import VendorLogin from './pages/VendorLogin';
 import VendorDashboard from './pages/VendorDashboard';
+import FieldOfficerLogin from './pages/FieldOfficerLogin';
+import FieldOfficerDashboard from './pages/FieldOfficerDashboard';
 
 // Context
 import { AuthProvider } from './context/AuthContext';
@@ -40,6 +42,7 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/vendor/login" element={<VendorLogin />} />
+            <Route path="/field-officer/login" element={<FieldOfficerLogin />} />
             <Route 
               path="/dashboard/*" 
               element={
@@ -56,6 +59,7 @@ function App() {
                 </PrivateRoute>
               } 
             />
+            <Route path="/field-officer/dashboard" element={<FieldOfficerDashboard />} />
             <Route 
               path="/manual-entry" 
               element={

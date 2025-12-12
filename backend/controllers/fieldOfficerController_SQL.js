@@ -1,5 +1,7 @@
 const FieldOfficer = require('../models/FieldOfficer_SQL');
 const Vendor = require('../models/Vendor_SQL');
+const Record = require('../models/Record_SQL');
+const { Op } = require('sequelize');
 
 // Create field officer
 exports.createFieldOfficer = async (req, res) => {
@@ -228,5 +230,50 @@ exports.toggleFieldOfficerStatus = async (req, res) => {
             success: false,
             message: 'Server error toggling field officer status'
         });
+    }
+};
+
+// Public: Get cases assigned to a Field Officer (demo endpoint without auth)
+exports.getCasesForFieldOfficerPublic = async (req, res) => {
+    try {
+        const { foId, status, search, page = 1, limit = 10 } = req.query;
+        if (!foId) {
+            return res.status(400).json({ success: false, message: 'foId is required' });
+        }
+
+        const where = { assignedFieldOfficer: foId };
+        if (status && status !== 'all') {
+            where.status = status;
+        }
+        if (search) {
+            where[Op.or] = [
+                { referenceNumber: { [Op.like]: `%${search}%` } },
+                { caseNumber: { [Op.like]: `%${search}%` } },
+                { fullName: { [Op.like]: `%${search}%` } },
+                { contactNumber: { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+        const { count, rows } = await Record.findAndCountAll({
+            where,
+            order: [['createdAt', 'DESC']],
+            limit: parseInt(limit),
+            offset: parseInt(offset)
+        });
+
+        res.json({
+            success: true,
+            records: rows,
+            pagination: {
+                total: count,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(count / parseInt(limit))
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching FO cases (public):', error);
+        res.status(500).json({ success: false, message: 'Server error fetching cases' });
     }
 };
