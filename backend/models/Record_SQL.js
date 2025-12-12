@@ -99,6 +99,11 @@ const Record = sequelize.define('Record', {
         type: DataTypes.STRING,
         allowNull: false
     }
+    ,
+    foVerification: {
+        type: DataTypes.JSON,
+        comment: 'Field Officer submission payload including respondent details, ownership, dates, comments, gps, signatures, file paths'
+    }
 }, {
     timestamps: true,
     tableName: 'records'

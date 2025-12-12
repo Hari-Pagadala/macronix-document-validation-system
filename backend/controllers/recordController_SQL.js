@@ -2,6 +2,7 @@ const Record = require('../models/Record_SQL');
 const Counter = require('../models/Counter_SQL');
 const Vendor = require('../models/Vendor_SQL');
 const FieldOfficer = require('../models/FieldOfficer_SQL');
+const Verification = require('../models/Verification_SQL');
 const { Op } = require('sequelize');
 
 // Generate reference number
@@ -303,6 +304,21 @@ exports.getRecordById = async (req, res) => {
     }
 };
 
+// Get verification details for a record
+exports.getRecordVerification = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const verification = await Verification.findOne({ where: { recordId: id } });
+        if (!verification) {
+            return res.status(404).json({ success: false, message: 'Verification not found' });
+        }
+        res.json({ success: true, verification });
+    } catch (error) {
+        console.error('Error fetching verification:', error);
+        res.status(500).json({ success: false, message: 'Server error fetching verification' });
+    }
+};
+
 // Update record
 exports.updateRecord = async (req, res) => {
     try {
@@ -539,6 +555,144 @@ exports.revertRecord = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error reverting case: ' + error.message
+        });
+    }
+};
+
+// Approve a submitted case
+exports.approveRecord = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const record = await Record.findByPk(id);
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Record not found'
+            });
+        }
+
+        if (record.status !== 'submitted') {
+            return res.status(400).json({
+                success: false,
+                message: 'Only submitted cases can be approved'
+            });
+        }
+
+        // Update record status to approved and set completion date
+        await record.update({
+            status: 'approved',
+            completionDate: new Date()
+        });
+
+        res.json({
+            success: true,
+            message: 'Case approved successfully',
+            record
+        });
+    } catch (error) {
+        console.error('Error approving record:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error approving case: ' + error.message
+        });
+    }
+};
+
+// Reject a submitted case
+exports.rejectRecord = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { reason } = req.body;
+
+        if (!reason || !reason.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Rejection reason is required'
+            });
+        }
+
+        const record = await Record.findByPk(id);
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Record not found'
+            });
+        }
+
+        if (record.status !== 'submitted') {
+            return res.status(400).json({
+                success: false,
+                message: 'Only submitted cases can be rejected'
+            });
+        }
+
+        // Update record status to rejected and store reason
+        // Field Officer must re-verify and resubmit
+        await record.update({
+            status: 'rejected',
+            remarks: reason
+        });
+
+        res.json({
+            success: true,
+            message: 'Case rejected successfully',
+            record
+        });
+    } catch (error) {
+        console.error('Error rejecting record:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error rejecting case: ' + error.message
+        });
+    }
+};
+
+// Re-initiate a rejected case back to pending
+exports.reinitiateRecord = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const record = await Record.findByPk(id);
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Record not found'
+            });
+        }
+
+        if (record.status !== 'rejected') {
+            return res.status(400).json({
+                success: false,
+                message: 'Only rejected cases can be re-initiated'
+            });
+        }
+
+        // Update record status back to pending and clear all assignments
+        // This allows Super Admin to assign the case to another vendor
+        await record.update({
+            status: 'pending',
+            // Clear all assignments for fresh processing
+            assignedVendor: null,
+            assignedVendorName: null,
+            assignedVendorCompanyName: null,
+            assignedFieldOfficer: null,
+            assignedFieldOfficerName: null,
+            assignedDate: null,
+            tatDueDate: null,
+            completionDate: null
+        });
+
+        res.json({
+            success: true,
+            message: 'Case re-initiated and moved to Pending successfully',
+            record
+        });
+    } catch (error) {
+        console.error('Error re-initiating record:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error re-initiating case: ' + error.message
         });
     }
 };
