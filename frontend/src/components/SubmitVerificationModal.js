@@ -102,13 +102,21 @@ const SubmitVerificationModal = ({ open, onClose, record, onSubmitted }) => {
       setSubmitting(true);
       const token = localStorage.getItem('fieldOfficerToken');
       const fd = new FormData();
-      Object.entries(form).forEach(([k,v]) => fd.append(k, v));
+      // Add form fields except comments (we'll handle it separately)
+      Object.entries(form).forEach(([k,v]) => {
+        if (k !== 'comments') {
+          fd.append(k, v);
+        }
+      });
+      // Handle comments based on action
+      if (action === 'insufficient') {
+        fd.append('comments', insufficientReason);
+      } else {
+        fd.append('comments', form.comments || '');
+      }
       fd.append('gpsLat', gps.lat);
       fd.append('gpsLng', gps.lng);
       fd.append('action', action);
-      if (action === 'insufficient') {
-        fd.append('comments', insufficientReason);
-      }
       documents.forEach(f => fd.append('documents', f));
       photos.forEach(f => fd.append('photos', f));
       // Convert signatures dataURL to blobs
