@@ -34,9 +34,11 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
   const [approving, setApproving] = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [reinitiating, setReinitiating] = useState(false);
+  const [sendingBack, setSendingBack] = useState(false);
   const [showApproveConfirm, setShowApproveConfirm] = useState(false);
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
   const [showReinitiateConfirm, setShowReinitiateConfirm] = useState(false);
+  const [showSendBackConfirm, setShowSendBackConfirm] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
   useEffect(() => {
@@ -214,6 +216,33 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
       console.error('Error re-initiating case:', err);
     } finally {
       setReinitiating(false);
+    }
+  };
+
+  const handleSendBackToFO = async () => {
+    try {
+      setSendingBack(true);
+      const response = await axios.put(
+        `http://localhost:5000/api/records/${recordId}/send-back`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+      if (response.data.success) {
+        setRecord(response.data.record);
+        setShowSendBackConfirm(false);
+        if (onStopSuccess) {
+          onStopSuccess();
+        }
+      }
+    } catch (err) {
+      setError('Failed to send case back: ' + (err.response?.data?.message || err.message));
+      console.error('Error sending case back:', err);
+    } finally {
+      setSendingBack(false);
     }
   };
 
@@ -481,6 +510,21 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
               </Button>
             </>
           )}
+          {record?.status === 'insufficient' && (
+            <Button 
+              onClick={() => setShowSendBackConfirm(true)}
+              variant="contained"
+              color="primary"
+              disabled={sendingBack}
+              sx={{
+                '&:hover': {
+                  background: '#1565c0'
+                }
+              }}
+            >
+              Send Back to Field Officer
+            </Button>
+          )}
           {record?.status === 'rejected' && (
             <Button 
               onClick={() => setShowReinitiateConfirm(true)}
@@ -496,7 +540,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
               Re-initiate Case
             </Button>
           )}
-          {record?.status !== 'stopped' && record?.status !== 'submitted' && record?.status !== 'rejected' && (
+          {record?.status !== 'stopped' && record?.status !== 'submitted' && record?.status !== 'rejected' && record?.status !== 'insufficient' && (
             <Button 
               onClick={() => setShowStopConfirm(true)}
               variant="contained"
@@ -753,6 +797,48 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
             disabled={reinitiating}
           >
             {reinitiating ? 'Re-initiating...' : 'Re-initiate Case'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Send Back to Field Officer Confirmation Dialog */}
+      <Dialog 
+        open={showSendBackConfirm}
+        onClose={() => setShowSendBackConfirm(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Send Back to Field Officer</DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Typography variant="body2" sx={{ mb: 2 }}>
+              Are you sure you want to send this insufficient case back to the Field Officer?
+            </Typography>
+            <Typography variant="body2" color="primary.main" sx={{ mb: 1 }}>
+              ✓ Case will return to Assigned status
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              ✓ Same Field Officer will receive it for re-verification
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              ✓ TAT due date will remain unchanged
+            </Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setShowSendBackConfirm(false)}
+            disabled={sendingBack}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleSendBackToFO}
+            variant="contained"
+            color="primary"
+            disabled={sendingBack}
+          >
+            {sendingBack ? 'Sending...' : 'Send Back to FO'}
           </Button>
         </DialogActions>
       </Dialog>

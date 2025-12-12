@@ -696,3 +696,50 @@ exports.reinitiateRecord = async (req, res) => {
         });
     }
 };
+
+// Send insufficient case back to the same Field Officer
+exports.sendBackToFieldOfficer = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const record = await Record.findByPk(id);
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Record not found'
+            });
+        }
+
+        if (record.status !== 'insufficient') {
+            return res.status(400).json({
+                success: false,
+                message: 'Only insufficient cases can be sent back to Field Officer'
+            });
+        }
+
+        if (!record.assignedFieldOfficer) {
+            return res.status(400).json({
+                success: false,
+                message: 'No Field Officer assigned to this case'
+            });
+        }
+
+        // Send back to assigned status - same Field Officer will get it
+        // TAT due date remains unchanged as per requirement
+        await record.update({
+            status: 'assigned'
+        });
+
+        res.json({
+            success: true,
+            message: 'Case sent back to Field Officer for re-verification',
+            record
+        });
+    } catch (error) {
+        console.error('Error sending case back to Field Officer:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error sending case back: ' + error.message
+        });
+    }
+};
