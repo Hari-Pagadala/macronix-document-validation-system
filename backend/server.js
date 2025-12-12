@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const path = require('path');
 const sequelize = require('./config/database');
 
 dotenv.config();
@@ -11,6 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Initialize database models
 const User = require('./models/User_SQL');
@@ -18,6 +20,7 @@ const Vendor = require('./models/Vendor_SQL');
 const FieldOfficer = require('./models/FieldOfficer_SQL');
 const Record = require('./models/Record_SQL');
 const Counter = require('./models/Counter_SQL');
+const Verification = require('./models/Verification_SQL');
 
 // Database connection and sync
 sequelize.authenticate()

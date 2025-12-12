@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Paper, Table, TableHead, TableRow, TableCell, TableBody, TableContainer, TablePagination, Box, TextField, InputAdornment, Chip, IconButton, CircularProgress, Typography } from '@mui/material';
+import { Paper, Table, TableHead, TableRow, TableCell, TableBody, TableContainer, TablePagination, Box, TextField, InputAdornment, Chip, IconButton, CircularProgress, Typography, Button } from '@mui/material';
 import { Search as SearchIcon, MoreVert as MoreVertIcon, Visibility as ViewIcon } from '@mui/icons-material';
+import SubmitVerificationModal from './SubmitVerificationModal';
 import axios from 'axios';
 
 const statusConfig = {
@@ -19,6 +20,8 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState('');
+  const [submitOpen, setSubmitOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] = useState(null);
 
   useEffect(() => {
     fetchRecords();
@@ -50,6 +53,9 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
       setLoading(false);
     }
   };
+  const openSubmit = (record) => { setSelectedRecord(record); setSubmitOpen(true); };
+  const closeSubmit = () => { setSubmitOpen(false); setSelectedRecord(null); };
+  const handleSubmitted = () => { closeSubmit(); fetchRecords(); };
 
   const handleSearch = (e) => { setSearch(e.target.value); setPage(0); };
   const handleChangePage = (e, newPage) => setPage(newPage);
@@ -61,6 +67,7 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
   };
 
   return (
+    <>
     <Paper sx={{ width: '100%' }}>
       <Box sx={{ p: 2 }}>
         <TextField
@@ -90,12 +97,13 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
                   <TableCell><strong>Location</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Created</strong></TableCell>
+                  {status === 'assigned' && <TableCell><strong>Actions</strong></TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {records.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={status === 'assigned' ? 8 : 7} align="center" sx={{ py: 3 }}>
                       <Typography color="text.secondary">No cases found</Typography>
                     </TableCell>
                   </TableRow>
@@ -121,6 +129,11 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
                           <Chip label={statusInfo.label} color={statusInfo.color} size="small" variant="outlined" />
                         </TableCell>
                         <TableCell>{formatDate(record.createdAt)}</TableCell>
+                        {status === 'assigned' && (
+                          <TableCell>
+                            <Button variant="contained" size="small" onClick={() => openSubmit(record)}>Submit Details</Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })
@@ -141,6 +154,16 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
         </>
       )}
     </Paper>
+
+    {selectedRecord && (
+      <SubmitVerificationModal
+        open={submitOpen}
+        onClose={closeSubmit}
+        record={selectedRecord}
+        onSubmitted={handleSubmitted}
+      />
+    )}
+    </>
   );
 };
 

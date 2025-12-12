@@ -1,6 +1,7 @@
 const FieldOfficer = require('../models/FieldOfficer_SQL');
 const Vendor = require('../models/Vendor_SQL');
 const Record = require('../models/Record_SQL');
+const Verification = require('../models/Verification_SQL');
 const { Op } = require('sequelize');
 
 // Create field officer
@@ -275,5 +276,81 @@ exports.getCasesForFieldOfficerPublic = async (req, res) => {
     } catch (error) {
         console.error('Error fetching FO cases (public):', error);
         res.status(500).json({ success: false, message: 'Server error fetching cases' });
+    }
+};
+
+// Protected: Submit verification details for an assigned case
+exports.submitVerification = async (req, res) => {
+    try {
+        const foId = req.fieldOfficerId;
+        const { caseId } = req.params;
+        const record = await Record.findByPk(caseId);
+        if (!record || record.assignedFieldOfficer !== foId) {
+            return res.status(404).json({ success: false, message: 'Case not found or not assigned to you' });
+        }
+        if (record.status !== 'assigned') {
+            return res.status(400).json({ success: false, message: 'Only assigned cases can be submitted' });
+        }
+
+        const {
+            respondentName,
+            respondentRelationship,
+            respondentContact,
+            periodOfStay,
+            ownershipType,
+            verificationDate,
+            comments,
+            gpsLat,
+            gpsLng,
+            officerSignature,
+            respondentSignature,
+            action
+        } = req.body;
+
+        if (!gpsLat || !gpsLng) {
+            return res.status(400).json({ success: false, message: 'GPS location is required. Please enable location services.' });
+        }
+
+        // Files uploaded via multer
+        const documents = (req.files?.documents || []).map(f => f.filename);
+        const photos = (req.files?.photos || []).map(f => f.filename);
+        const payload = {
+            recordId: record.id,
+            fieldOfficerId: foId,
+            respondentName,
+            respondentRelationship,
+            respondentContact,
+            periodOfStay,
+            ownershipType,
+            verificationDate: verificationDate ? new Date(verificationDate) : null,
+            comments,
+            gpsLat,
+            gpsLng,
+            documents,
+            photos,
+            officerSignaturePath: req.files?.officerSignature?.[0]?.filename || null,
+            respondentSignaturePath: req.files?.respondentSignature?.[0]?.filename || null,
+            status: action === 'insufficient' ? 'insufficient' : 'submitted'
+        };
+
+        const existing = await Verification.findOne({ where: { recordId: record.id } });
+        if (existing) {
+            await existing.update(payload);
+        } else {
+            await Verification.create(payload);
+        }
+
+        if (action === 'insufficient') {
+            record.status = 'insufficient';
+        } else {
+            record.status = 'submitted';
+            record.completionDate = new Date();
+        }
+        await record.save();
+
+        res.json({ success: true, message: 'Verification submitted', record: record.toJSON() });
+    } catch (error) {
+        console.error('Error submitting verification:', error);
+        res.status(500).json({ success: false, message: 'Server error submitting verification' });
     }
 };
