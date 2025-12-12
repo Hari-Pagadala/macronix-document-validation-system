@@ -177,19 +177,26 @@ const SubmitVerificationModal = ({ open, onClose, record, onSubmitted }) => {
             <Grid item xs={6}><TextField label="Relationship with Candidate" name="respondentRelationship" value={form.respondentRelationship} onChange={handleChange} fullWidth /></Grid>
             <Grid item xs={6}><TextField label="Respondent Contact" name="respondentContact" value={form.respondentContact} onChange={handleChange} fullWidth /></Grid>
             <Grid item xs={6}><TextField label="Period of Stay" name="periodOfStay" value={form.periodOfStay} onChange={handleChange} fullWidth /></Grid>
-            <Grid item xs={6}><TextField select label="Ownership Type" name="ownershipType" value={form.ownershipType} onChange={handleChange} fullWidth>
+            <Grid item xs={12} md={6}><TextField select label="Ownership Type" name="ownershipType" value={form.ownershipType} onChange={handleChange} fullWidth InputLabelProps={{ shrink: true }} SelectProps={{ displayEmpty: true, MenuProps: { PaperProps: { sx: { maxHeight: 300, minWidth: '200px' } } } }} sx={{ minWidth: '200px' }}>
+              <MenuItem value="" disabled><em>Select type</em></MenuItem>
               {ownershipOptions.map(o => (<MenuItem key={o} value={o}>{o}</MenuItem>))}
             </TextField></Grid>
-            <Grid item xs={6}><TextField type="date" label="Date of Verification" name="verificationDate" value={form.verificationDate} onChange={handleChange} fullWidth InputLabelProps={{ shrink: true }} /></Grid>
+            <Grid item xs={12} md={6}><TextField type="date" label="Date of Verification" name="verificationDate" value={form.verificationDate} onChange={handleChange} fullWidth InputLabelProps={{ shrink: true }} /></Grid>
           </Grid>
         </Box>
 
         {/* Uploads */}
         <Box sx={{ mb: 2 }}>
-          <Typography variant="subtitle2">Document Uploads</Typography>
-          <Grid container spacing={2} sx={{ mt: 1 }}>
-            <Grid item xs={12}><TextField type="file" inputProps={{ multiple: true }} onChange={handleFile(setDocuments)} fullWidth label="Documents (Proof of relationship)" /></Grid>
-            <Grid item xs={12}><TextField type="file" inputProps={{ multiple: true }} onChange={handleFile(setPhotos)} fullWidth label="House Photographs" /></Grid>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>Document Uploads</Typography>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>Documents (Proof of relationship)</Typography>
+              <TextField type="file" inputProps={{ multiple: true }} onChange={handleFile(setDocuments)} fullWidth InputLabelProps={{ shrink: true }} />
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>House Photographs</Typography>
+              <TextField type="file" inputProps={{ multiple: true }} onChange={handleFile(setPhotos)} fullWidth InputLabelProps={{ shrink: true }} />
+            </Grid>
           </Grid>
         </Box>
 
