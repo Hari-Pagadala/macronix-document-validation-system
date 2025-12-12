@@ -94,12 +94,6 @@ const VendorDashboard = () => {
           <Box>
             {/* Statistics Cards */}
             <Grid container spacing={3} sx={{ mb: 4 }}>
-              <Grid item xs={12}>
-                <Typography variant="h5" gutterBottom>
-                  Dashboard Overview
-                </Typography>
-              </Grid>
-              
               <Grid item xs={12} sm={6} md={3}>
                 <Card>
                   <CardContent>
