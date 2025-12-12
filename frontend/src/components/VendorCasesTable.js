@@ -167,6 +167,28 @@ const VendorCasesTable = ({ status = 'all', onUpdate }) => {
     }
   };
 
+  const getTATStatus = (record) => {
+    if (!record.tatDueDate || record.status === 'approved' || record.status === 'rejected') {
+      return null;
+    }
+
+    const now = new Date();
+    const dueDate = new Date(record.tatDueDate);
+    dueDate.setHours(23, 59, 59, 999);
+    const daysRemaining = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
+
+    if (daysRemaining < 0) {
+      return { type: 'breached', label: `Delayed by ${Math.abs(daysRemaining)} day(s)`, days: Math.abs(daysRemaining) };
+    } else if (daysRemaining === 0) {
+      return { type: 'due-today', label: 'Due Today', days: 0 };
+    } else if (daysRemaining === 1) {
+      return { type: 'urgent', label: 'Due Tomorrow', days: 1 };
+    } else if (daysRemaining <= 3) {
+      return { type: 'warning', label: `Due in ${daysRemaining} day(s)`, days: daysRemaining };
+    }
+    return { type: 'on-time', label: `On Time (${daysRemaining}d left)`, days: daysRemaining };
+  };
+
   const formatDate = (date) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('en-IN', {
@@ -216,6 +238,7 @@ const VendorCasesTable = ({ status = 'all', onUpdate }) => {
                   <TableCell><strong>Location</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Created</strong></TableCell>
+                  <TableCell><strong>TAT Status</strong></TableCell>
                   <TableCell align="center"><strong>Actions</strong></TableCell>
                 </TableRow>
               </TableHead>
@@ -238,6 +261,7 @@ const VendorCasesTable = ({ status = 'all', onUpdate }) => {
                     const displayContact = record.contactNumber || 'N/A';
                     const displayLocation = [record.district, record.state].filter(Boolean).join(', ') || 'N/A';
                     const displayCase = record.caseNumber || record.referenceNumber || 'N/A';
+                    const tatStatus = getTATStatus(record);
 
                     return (
                       <TableRow key={record.id} hover>
@@ -271,6 +295,25 @@ const VendorCasesTable = ({ status = 'all', onUpdate }) => {
                           )}
                         </TableCell>
                         <TableCell>{formatDate(record.createdAt)}</TableCell>
+                        <TableCell>
+                          {tatStatus ? (
+                            <Chip
+                              label={tatStatus.label}
+                              color={
+                                tatStatus.type === 'breached' ? 'error' :
+                                tatStatus.type === 'due-today' ? 'error' :
+                                tatStatus.type === 'urgent' ? 'error' :
+                                tatStatus.type === 'warning' ? 'warning' :
+                                'success'
+                              }
+                              size="small"
+                            />
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              N/A
+                            </Typography>
+                          )}
+                        </TableCell>
                         <TableCell align="center">
                           <IconButton
                             size="small"
@@ -342,6 +385,28 @@ const VendorCasesTable = ({ status = 'all', onUpdate }) => {
                 <Box>
                   <Typography variant="caption" color="text.secondary">Created</Typography>
                   <Typography>{formatDate(selectedRecord.createdAt)}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">TAT Due Date</Typography>
+                  <Typography>{formatDate(selectedRecord.tatDueDate)}</Typography>
+                </Box>
+                <Box>
+                  <Typography variant="caption" color="text.secondary">TAT Status</Typography>
+                  {getTATStatus(selectedRecord) ? (
+                    <Chip
+                      label={getTATStatus(selectedRecord).label}
+                      color={
+                        getTATStatus(selectedRecord).type === 'breached' ? 'error' :
+                        getTATStatus(selectedRecord).type === 'due-today' ? 'error' :
+                        getTATStatus(selectedRecord).type === 'urgent' ? 'error' :
+                        getTATStatus(selectedRecord).type === 'warning' ? 'warning' :
+                        'success'
+                      }
+                      size="small"
+                    />
+                  ) : (
+                    <Typography>N/A</Typography>
+                  )}
                 </Box>
               </Box>
 
