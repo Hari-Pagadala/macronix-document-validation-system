@@ -7,6 +7,8 @@ import CssBaseline from '@mui/material/CssBaseline';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import ManualEntryPage from './pages/ManualEntryPage';
+import VendorLogin from './pages/VendorLogin';
+import VendorDashboard from './pages/VendorDashboard';
 
 // Context
 import { AuthProvider } from './context/AuthContext';
@@ -37,11 +39,20 @@ function App() {
         <Router>
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/vendor/login" element={<VendorLogin />} />
             <Route 
               path="/dashboard/*" 
               element={
                 <PrivateRoute>
                   <Dashboard />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/vendor/dashboard" 
+              element={
+                <PrivateRoute>
+                  <VendorDashboard />
                 </PrivateRoute>
               } 
             />

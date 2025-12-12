@@ -1,0 +1,328 @@
+const Record = require('../models/Record_SQL');
+const Vendor = require('../models/Vendor_SQL');
+const FieldOfficer = require('../models/FieldOfficer_SQL');
+const { Op } = require('sequelize');
+
+// Get Vendor Dashboard Stats
+exports.getVendorDashboardStats = async (req, res) => {
+    try {
+        const vendorId = req.userId;
+        
+        const totalAssignedCases = await Record.count({ 
+            where: { assignedVendor: vendorId } 
+        });
+        
+        const pendingCases = await Record.count({ 
+            where: { 
+                assignedVendor: vendorId,
+                status: 'pending'
+            } 
+        });
+        
+        const vendorAssignedCases = await Record.count({ 
+            where: { 
+                assignedVendor: vendorId,
+                status: 'vendor_assigned'
+            } 
+        });
+        
+        const assignedToFieldOfficer = await Record.count({ 
+            where: { 
+                assignedVendor: vendorId,
+                status: 'assigned',
+                assignedFieldOfficer: { [Op.ne]: null }
+            } 
+        });
+        
+        const submittedCases = await Record.count({ 
+            where: { 
+                assignedVendor: vendorId,
+                status: 'submitted'
+            } 
+        });
+        
+        const approvedCases = await Record.count({ 
+            where: { 
+                assignedVendor: vendorId,
+                status: 'approved'
+            } 
+        });
+        
+        const rejectedCases = await Record.count({ 
+            where: { 
+                assignedVendor: vendorId,
+                status: 'rejected'
+            } 
+        });
+        
+        const insufficientCases = await Record.count({ 
+            where: { 
+                assignedVendor: vendorId,
+                status: 'insufficient'
+            } 
+        });
+        
+        const stoppedCases = await Record.count({ 
+            where: { 
+                assignedVendor: vendorId,
+                status: 'stopped'
+            } 
+        });
+        
+        res.json({
+            success: true,
+            stats: {
+                totalAssignedCases,
+                pendingCases,
+                vendorAssignedCases,
+                assignedToFieldOfficer,
+                submittedCases,
+                approvedCases,
+                rejectedCases,
+                insufficientCases,
+                stoppedCases
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching vendor dashboard stats:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error fetching stats: ' + error.message
+        });
+    }
+};
+
+// Get Vendor Cases (only cases assigned to this vendor)
+exports.getVendorCases = async (req, res) => {
+    try {
+        const vendorId = req.userId;
+        const { status, search, page = 1, limit = 10 } = req.query;
+        const offset = (page - 1) * limit;
+        
+        const where = {
+            assignedVendor: vendorId
+        };
+        
+        if (status && status !== 'all') {
+            where.status = status;
+        }
+        
+        if (search) {
+            where[Op.or] = [
+                { referenceNumber: { [Op.like]: `%${search}%` } },
+                { caseNumber: { [Op.like]: `%${search}%` } },
+                { fullName: { [Op.like]: `%${search}%` } },
+                { contactNumber: { [Op.like]: `%${search}%` } }
+            ];
+        }
+        
+        const { count, rows } = await Record.findAndCountAll({
+            where,
+            order: [['createdAt', 'DESC']],
+            limit: parseInt(limit),
+            offset: parseInt(offset)
+        });
+        
+        // Fetch field officer details for each record
+        const recordsWithDetails = await Promise.all(rows.map(async (record) => {
+            const recordData = record.toJSON();
+            
+            if (record.assignedFieldOfficer) {
+                const officer = await FieldOfficer.findByPk(record.assignedFieldOfficer);
+                if (officer) {
+                    recordData.assignedFieldOfficerName = officer.name;
+                    recordData.fieldOfficerPhone = officer.phoneNumber;
+                }
+            }
+            
+            return recordData;
+        }));
+        
+        res.json({
+            success: true,
+            records: recordsWithDetails,
+            pagination: {
+                total: count,
+                page: parseInt(page),
+                limit: parseInt(limit),
+                pages: Math.ceil(count / limit)
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching vendor cases:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error fetching cases: ' + error.message
+        });
+    }
+};
+
+// Get Single Case (only if assigned to vendor)
+exports.getVendorCase = async (req, res) => {
+    try {
+        const vendorId = req.userId;
+        const { id } = req.params;
+        
+        const record = await Record.findOne({
+            where: { 
+                id,
+                assignedVendor: vendorId
+            }
+        });
+        
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Case not found or not assigned to you'
+            });
+        }
+        
+        const recordData = record.toJSON();
+        
+        // Add field officer details
+        if (record.assignedFieldOfficer) {
+            const officer = await FieldOfficer.findByPk(record.assignedFieldOfficer);
+            if (officer) {
+                recordData.fieldOfficer = {
+                    id: officer.id,
+                    name: officer.name,
+                    phoneNumber: officer.phoneNumber,
+                    email: officer.email
+                };
+            }
+        }
+        
+        res.json({
+            success: true,
+            record: recordData
+        });
+    } catch (error) {
+        console.error('Error fetching case:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error fetching case'
+        });
+    }
+};
+
+// Assign Field Officer to Case
+exports.assignFieldOfficer = async (req, res) => {
+    try {
+        const vendorId = req.userId;
+        const { caseId } = req.params;
+        const { fieldOfficerId } = req.body;
+        
+        // Check if case belongs to this vendor
+        const record = await Record.findOne({
+            where: { 
+                id: caseId,
+                assignedVendor: vendorId
+            }
+        });
+        
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Case not found or not assigned to you'
+            });
+        }
+        
+        // Check if field officer belongs to this vendor
+        const fieldOfficer = await FieldOfficer.findOne({
+            where: { 
+                id: fieldOfficerId,
+                vendor: vendorId,
+                status: 'active'
+            }
+        });
+        
+        if (!fieldOfficer) {
+            return res.status(404).json({
+                success: false,
+                message: 'Field officer not found or not assigned to your company'
+            });
+        }
+        
+        // Update record
+        record.assignedFieldOfficer = fieldOfficerId;
+        record.assignedFieldOfficerName = fieldOfficer.name;
+        
+        // Update status to assigned if currently pending or vendor_assigned
+        if (record.status === 'pending' || record.status === 'vendor_assigned') {
+            record.status = 'assigned';
+            record.assignedDate = new Date();
+            
+            // Calculate TAT due date (7 days from assignment)
+            const tatDueDate = new Date();
+            tatDueDate.setDate(tatDueDate.getDate() + 7);
+            record.tatDueDate = tatDueDate;
+        }
+        
+        await record.save();
+        
+        res.json({
+            success: true,
+            message: 'Field officer assigned successfully',
+            record: record.toJSON()
+        });
+    } catch (error) {
+        console.error('Error assigning field officer:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error assigning field officer'
+        });
+    }
+};
+
+// Update Case Status (limited actions for vendor)
+exports.updateCaseStatus = async (req, res) => {
+    try {
+        const vendorId = req.userId;
+        const { caseId } = req.params;
+        const { status, remarks } = req.body;
+        
+        // Allowed status updates for vendors
+        const allowedStatuses = ['submitted', 'insufficient'];
+        
+        if (!allowedStatuses.includes(status)) {
+            return res.status(403).json({
+                success: false,
+                message: 'You are not authorized to set this status'
+            });
+        }
+        
+        // Check if case belongs to this vendor
+        const record = await Record.findOne({
+            where: { 
+                id: caseId,
+                assignedVendor: vendorId
+            }
+        });
+        
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Case not found or not assigned to you'
+            });
+        }
+        
+        record.status = status;
+        if (remarks) {
+            record.remarks = remarks;
+        }
+        
+        await record.save();
+        
+        res.json({
+            success: true,
+            message: 'Case status updated successfully',
+            record: record.toJSON()
+        });
+    } catch (error) {
+        console.error('Error updating case status:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error updating case status'
+        });
+    }
+};
