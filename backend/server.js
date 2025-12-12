@@ -39,12 +39,14 @@ const recordRoutes = require('./routes/recordRoutes');
 const vendorRoutes = require('./routes/vendorRoutes');
 const fieldOfficerRoutes = require('./routes/fieldOfficerRoutes');
 const vendorPortalRoutes = require('./routes/vendorPortalRoutes');
+const foPortalRoutes = require('./routes/foPortalRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/records', recordRoutes);
 app.use('/api/vendors', vendorRoutes);
 app.use('/api/field-officers', fieldOfficerRoutes);
 app.use('/api/vendor-portal', vendorPortalRoutes);
+app.use('/api/fo-portal', foPortalRoutes);
 
 // Health check
 app.get('/', (req, res) => {
