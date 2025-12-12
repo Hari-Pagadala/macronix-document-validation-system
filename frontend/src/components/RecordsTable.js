@@ -228,6 +228,9 @@ const RecordsTable = ({ status = 'all' }) => {
               ) : (
                 records.map((record) => {
                   const statusInfo = statusConfig[record.status] || statusConfig.pending;
+                  // Prefer company name for vendor label; fall back to any available vendor reference
+                  const vendorName = record.assignedVendorCompanyName || record.vendor?.company || record.vendorName || record.assignedVendorName;
+                  const fieldOfficerName = record.assignedFieldOfficerName || record.fieldOfficerName;
                   const tatStatus = getTATStatus(record);
                   const displayCase = record.caseNumber || record.referenceNumber || 'N/A';
                   const displayName = record.fullName || [record.firstName, record.lastName].filter(Boolean).join(' ').trim() || 'N/A';
@@ -274,6 +277,20 @@ const RecordsTable = ({ status = 'all' }) => {
                           size="small"
                           variant="outlined"
                         />
+                        {(vendorName || fieldOfficerName) && (
+                          <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                            {vendorName && (
+                              <Typography variant="caption" color="text.secondary">
+                                Vendor: {vendorName}
+                              </Typography>
+                            )}
+                            {fieldOfficerName && (
+                              <Typography variant="caption" color="text.secondary">
+                                Field Officer: {fieldOfficerName}
+                              </Typography>
+                            )}
+                          </Box>
+                        )}
                       </TableCell>
                       <TableCell>{formatDate(record.createdAt)}</TableCell>
                       <TableCell>
