@@ -24,12 +24,14 @@ import {
   CheckCircle,
   Cancel,
   Warning,
-  Stop
+  Stop,
+  Download
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import VendorCasesTable from '../components/VendorCasesTable';
 import VendorFieldOfficerManagement from '../components/VendorFieldOfficerManagement';
+import VendorDownloadReportsDialog from '../components/VendorDownloadReportsDialog';
 
 const VendorDashboard = () => {
   const navigate = useNavigate();
@@ -39,6 +41,7 @@ const VendorDashboard = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [activeSection, setActiveSection] = useState('dashboard');
   const [anchorEl, setAnchorEl] = useState(null);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
 
   useEffect(() => {
     // Load vendor token and user from localStorage
@@ -203,6 +206,13 @@ const VendorDashboard = () => {
             <Paper sx={{ width: '100%', mb: 2 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 2 }}>
                 <Typography variant="h6">My Cases</Typography>
+                <Button
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={() => setDownloadDialogOpen(true)}
+                >
+                  Download Reports
+                </Button>
               </Box>
               <Tabs
                 value={activeTab}
@@ -288,6 +298,12 @@ const VendorDashboard = () => {
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
         {renderContent()}
       </Container>
+
+      {/* Download Reports Dialog */}
+      <VendorDownloadReportsDialog 
+        open={downloadDialogOpen} 
+        onClose={() => setDownloadDialogOpen(false)} 
+      />
     </Box>
   );
 };

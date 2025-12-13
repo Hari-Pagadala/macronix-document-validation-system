@@ -34,13 +34,15 @@ import {
   AssignmentInd as AssignmentIndIcon,
   PostAdd as PostAddIcon,
   Storage as StorageIcon,
-  Home as HomeIcon
+  Home as HomeIcon,
+  Download as DownloadIcon
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
 import RecordsTable from '../components/RecordsTable';
 import UploadExcel from '../components/UploadExcel';
 import VendorManagement from '../components/VendorManagement';
 import FieldOfficerManagement from '../components/FieldOfficerManagement';
+import DownloadReportsDialog from '../components/DownloadReportsDialog';
 import axios from 'axios';
 
 const drawerWidth = 240;
@@ -54,6 +56,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [sideNavOpen, setSideNavOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -351,6 +354,15 @@ const Dashboard = () => {
           >
             Manual Entry
           </Button>
+          <Button
+            variant="outlined"
+            color="inherit"
+            startIcon={<DownloadIcon />}
+            onClick={() => setDownloadDialogOpen(true)}
+            sx={{ mr: 2 }}
+          >
+            Download Reports
+          </Button>
           <IconButton
             color="inherit"
             onClick={handleMenuOpen}
@@ -408,6 +420,12 @@ const Dashboard = () => {
           {renderContent()}
         </Container>
       </Box>
+
+      {/* Download Reports Dialog */}
+      <DownloadReportsDialog 
+        open={downloadDialogOpen} 
+        onClose={() => setDownloadDialogOpen(false)} 
+      />
     </Box>
   );
 };

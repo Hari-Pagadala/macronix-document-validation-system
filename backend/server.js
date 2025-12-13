@@ -43,6 +43,7 @@ const vendorRoutes = require('./routes/vendorRoutes');
 const fieldOfficerRoutes = require('./routes/fieldOfficerRoutes');
 const vendorPortalRoutes = require('./routes/vendorPortalRoutes');
 const foPortalRoutes = require('./routes/foPortalRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/records', recordRoutes);
@@ -50,6 +51,7 @@ app.use('/api/vendors', vendorRoutes);
 app.use('/api/field-officers', fieldOfficerRoutes);
 app.use('/api/vendor-portal', vendorPortalRoutes);
 app.use('/api/fo-portal', foPortalRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Health check
 app.get('/', (req, res) => {
