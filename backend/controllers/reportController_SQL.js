@@ -134,6 +134,8 @@ exports.downloadVendorCasesReport = async (req, res) => {
         const vendorId = req.userId; // From vendor auth middleware
         const { status, fromDate, toDate } = req.query;
         
+        console.log('Vendor Download Request:', { vendorId, status, fromDate, toDate });
+        
         // Build where clause
         const where = { assignedVendor: vendorId };
         
@@ -155,6 +157,8 @@ exports.downloadVendorCasesReport = async (req, res) => {
             }
         }
         
+        console.log('Query where clause:', JSON.stringify(where, null, 2));
+        
         // Fetch records
         const records = await Record.findAll({
             where,
@@ -162,10 +166,12 @@ exports.downloadVendorCasesReport = async (req, res) => {
             raw: true
         });
         
+        console.log(`Found ${records.length} records for vendor ${vendorId}`);
+        
         if (records.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'No cases found for the selected filters'
+                message: 'No cases found for the selected filters. Try adjusting the date range or status filter.'
             });
         }
         
