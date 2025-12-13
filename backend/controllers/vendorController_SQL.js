@@ -6,6 +6,15 @@ const { validatePassword } = require('../utils/passwordValidation');
 exports.createVendor = async (req, res) => {
     try {
         const { name, company, email, phoneNumber, password } = req.body;
+        // Basic validations: email format, phone digits length
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const phoneRegex = /^\d{10}$/;
+        if (!email || !emailRegex.test(email)) {
+            return res.status(400).json({ success: false, message: 'Invalid email format' });
+        }
+        if (!phoneNumber || !phoneRegex.test(phoneNumber)) {
+            return res.status(400).json({ success: false, message: 'Phone number must be exactly 10 digits' });
+        }
         
         // Validate password
         const passwordValidation = validatePassword(password, email);
@@ -149,6 +158,15 @@ exports.updateVendor = async (req, res) => {
             });
         }
         
+        // Email + phone validation and duplicates check
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const phoneRegex = /^\d{10}$/;
+        if (updateData.email && !emailRegex.test(updateData.email)) {
+            return res.status(400).json({ success: false, message: 'Invalid email format' });
+        }
+        if (updateData.phoneNumber && !phoneRegex.test(updateData.phoneNumber)) {
+            return res.status(400).json({ success: false, message: 'Phone number must be exactly 10 digits' });
+        }
         // If changing email, check if new email exists
         if (updateData.email && updateData.email !== vendor.email) {
             const existingVendor = await Vendor.findOne({ where: { email: updateData.email } });
