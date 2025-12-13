@@ -79,6 +79,8 @@ exports.createFieldOfficer = async (req, res) => {
         const vendorId = req.userId;
         const vendorCompany = req.company;
         const { name, email, phoneNumber, password } = req.body;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const phoneRegex = /^\d{10}$/;
         
         // Validate required fields
         if (!name || !email || !phoneNumber || !password) {
@@ -88,6 +90,13 @@ exports.createFieldOfficer = async (req, res) => {
             });
         }
         
+        // Validate email and phone
+        if (!email || !emailRegex.test(email)) {
+            return res.status(400).json({ success: false, message: 'Invalid email format' });
+        }
+        if (!phoneNumber || !phoneRegex.test(phoneNumber)) {
+            return res.status(400).json({ success: false, message: 'Phone number must be exactly 10 digits' });
+        }
         // Check if email already exists
         const existingOfficer = await FieldOfficer.findOne({ where: { email } });
         if (existingOfficer) {
@@ -148,6 +157,8 @@ exports.updateFieldOfficer = async (req, res) => {
         const vendorId = req.userId;
         const { id } = req.params;
         const { name, phoneNumber, password } = req.body;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const phoneRegex = /^\d{10}$/;
         
         const fieldOfficer = await FieldOfficer.findOne({
             where: { 
@@ -164,7 +175,12 @@ exports.updateFieldOfficer = async (req, res) => {
         }
         
         if (name) fieldOfficer.name = name;
-        if (phoneNumber) fieldOfficer.phoneNumber = phoneNumber;
+        if (phoneNumber) {
+            if (!phoneRegex.test(phoneNumber)) {
+                return res.status(400).json({ success: false, message: 'Phone number must be exactly 10 digits' });
+            }
+            fieldOfficer.phoneNumber = phoneNumber;
+        }
         if (password) {
             const { validatePassword } = require('../utils/passwordValidation');
             const result = validatePassword(password, fieldOfficer.email || '');

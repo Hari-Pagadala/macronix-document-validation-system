@@ -9,6 +9,14 @@ const { Op } = require('sequelize');
 exports.createFieldOfficer = async (req, res) => {
     try {
         const { name, email, phoneNumber, password, vendor } = req.body;
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const phoneRegex = /^\d{10}$/;
+        if (!email || !emailRegex.test(email)) {
+            return res.status(400).json({ success: false, message: 'Invalid email format' });
+        }
+        if (!phoneNumber || !phoneRegex.test(phoneNumber)) {
+            return res.status(400).json({ success: false, message: 'Phone number must be exactly 10 digits' });
+        }
         
         // Validate password
         const passwordValidation = validatePassword(password, email);
@@ -165,6 +173,21 @@ exports.updateFieldOfficer = async (req, res) => {
     try {
         const { id } = req.params;
         const updateData = req.body;
+                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                const phoneRegex = /^\d{10}$/;
+                if (updateData.email && !emailRegex.test(updateData.email)) {
+                    return res.status(400).json({ success: false, message: 'Invalid email format' });
+                }
+                if (updateData.phoneNumber && !phoneRegex.test(updateData.phoneNumber)) {
+                    return res.status(400).json({ success: false, message: 'Phone number must be exactly 10 digits' });
+                }
+                // If changing email, ensure uniqueness
+                if (updateData.email && updateData.email !== fieldOfficer.email) {
+                    const dup = await FieldOfficer.findOne({ where: { email: updateData.email } });
+                    if (dup) {
+                        return res.status(400).json({ success: false, message: 'Another field officer with this email already exists' });
+                    }
+                }
         
         const fieldOfficer = await FieldOfficer.findByPk(id);
         if (!fieldOfficer) {

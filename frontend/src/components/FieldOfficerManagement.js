@@ -54,6 +54,8 @@ const FieldOfficerManagement = () => {
     vendor: ''
   });
   const [passwordValid, setPasswordValid] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
 
   useEffect(() => {
     if (token && !authLoading) {
@@ -131,11 +133,23 @@ const FieldOfficerManagement = () => {
   };
 
   const handleInputChange = (e) => {
-    const { name, value } = e.target;
+    const { name } = e.target;
+    let value = e.target.value;
+    if (name === 'phoneNumber') {
+      value = value.replace(/[^0-9]/g, '');
+    }
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
+    if (name === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      setEmailError(value && !emailRegex.test(value) ? 'Invalid email format' : '');
+    }
+    if (name === 'phoneNumber') {
+      const phoneRegex = /^\d{10}$/;
+      setPhoneError(value && !phoneRegex.test(value) ? 'Phone must be 10 digits' : '');
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -311,14 +325,27 @@ const FieldOfficerManagement = () => {
                 onChange={handleInputChange}
                 required
                 disabled={editMode}
+                error={!!emailError}
+                helperText={emailError || (editMode ? 'Email cannot be changed' : '')}
               />
               <TextField
                 fullWidth
                 label="Phone Number"
                 name="phoneNumber"
+                type="tel"
                 value={formData.phoneNumber}
                 onChange={handleInputChange}
                 required
+                error={!!phoneError}
+                helperText={phoneError}
+                inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 10 }}
+                onKeyDown={(ev) => {
+                  const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','Home','End'];
+                  if (allowed.includes(ev.key)) return;
+                  if (!/^[0-9]$/.test(ev.key)) {
+                    ev.preventDefault();
+                  }
+                }}
               />
               <FormControl fullWidth required>
                 <InputLabel>Vendor</InputLabel>
@@ -357,7 +384,8 @@ const FieldOfficerManagement = () => {
             <Button type="submit" variant="contained" disabled={
               !formData.vendor ||
               (!editMode && (!formData.password || !passwordValid)) ||
-              (editMode && formData.password && !passwordValid)
+              (editMode && formData.password && !passwordValid) ||
+              !formData.email || !!emailError || !formData.phoneNumber || !!phoneError
             }>
               {editMode ? 'Update' : 'Create'}
             </Button>

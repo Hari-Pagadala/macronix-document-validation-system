@@ -51,6 +51,8 @@ const VendorFieldOfficerManagement = () => {
     password: ''
   });
 
+  const [emailError, setEmailError] = useState('');
+  const [phoneError, setPhoneError] = useState('');
   useEffect(() => {
     fetchFieldOfficers();
   }, []);
@@ -96,10 +98,23 @@ const VendorFieldOfficerManagement = () => {
   };
 
   const handleChange = (e) => {
+    const { name } = e.target;
+    let value = e.target.value;
+    if (name === 'phoneNumber') {
+      value = value.replace(/[^0-9]/g, '');
+    }
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
+    if (e.target.name === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      setEmailError(e.target.value && !emailRegex.test(e.target.value) ? 'Invalid email format' : '');
+    }
+    if (e.target.name === 'phoneNumber') {
+      const phoneRegex = /^\d{10}$/;
+      setPhoneError(e.target.value && !phoneRegex.test(e.target.value) ? 'Phone must be 10 digits' : '');
+    }
   };
 
   const handleSubmit = async () => {
@@ -305,14 +320,27 @@ const VendorFieldOfficerManagement = () => {
               onChange={handleChange}
               required
               disabled={editingId} // Don't allow email change
+              error={!!emailError}
+              helperText={emailError || (editingId ? 'Email cannot be changed' : '')}
             />
             <TextField
               fullWidth
               label="Phone Number"
               name="phoneNumber"
+              type="tel"
               value={formData.phoneNumber}
               onChange={handleChange}
               required
+              error={!!phoneError}
+              helperText={phoneError}
+              inputProps={{ inputMode: 'numeric', pattern: '[0-9]*', maxLength: 10 }}
+              onKeyDown={(ev) => {
+                const allowed = ['Backspace','Delete','Tab','ArrowLeft','ArrowRight','Home','End'];
+                if (allowed.includes(ev.key)) return;
+                if (!/^[0-9]$/.test(ev.key)) {
+                  ev.preventDefault();
+                }
+              }}
             />
             <PasswordField
               value={formData.password}
@@ -336,8 +364,8 @@ const VendorFieldOfficerManagement = () => {
             disabled={
               loading ||
               !formData.name ||
-              !formData.email ||
-              !formData.phoneNumber ||
+              !formData.email || !!emailError ||
+              !formData.phoneNumber || !!phoneError ||
               (!editingId && (!formData.password || !passwordValid)) ||
               (editingId && formData.password && !passwordValid)
             }
