@@ -96,6 +96,17 @@ exports.createFieldOfficer = async (req, res) => {
                 message: 'Email already exists'
             });
         }
+
+        // Password validation
+        const { validatePassword } = require('../utils/passwordValidation');
+        const result = validatePassword(password, email || '');
+        if (!result.isValid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid password',
+                errors: result.errors
+            });
+        }
         
         const fieldOfficer = await FieldOfficer.create({
             name,
@@ -154,7 +165,18 @@ exports.updateFieldOfficer = async (req, res) => {
         
         if (name) fieldOfficer.name = name;
         if (phoneNumber) fieldOfficer.phoneNumber = phoneNumber;
-        if (password) fieldOfficer.password = password;
+        if (password) {
+            const { validatePassword } = require('../utils/passwordValidation');
+            const result = validatePassword(password, fieldOfficer.email || '');
+            if (!result.isValid) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid password',
+                    errors: result.errors
+                });
+            }
+            fieldOfficer.password = password;
+        }
         
         await fieldOfficer.save();
         

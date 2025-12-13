@@ -1,59 +1,117 @@
 import React, { useState } from 'react';
-import { Container, Box, Paper, Typography, TextField, Button, CircularProgress } from '@mui/material';
+import {
+  Container,
+  Paper,
+  TextField,
+  Button,
+  Typography,
+  Box,
+  Alert,
+  CircularProgress
+} from '@mui/material';
+import { AccountCircle as AccountCircleIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
 const FieldOfficerLogin = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState({ email: '', password: '' });
+  const [formData, setFormData] = useState({
+    email: '',
+    password: ''
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
   };
 
-  const handleLogin = async () => {
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
     setError('');
-    if (!formData.email || !formData.password) {
-      setError('Email and password are required');
-      return;
-    }
+
     try {
-      setLoading(true);
-      const resp = await fetch('http://localhost:5000/api/fo-portal/login', {
+      const response = await fetch('http://localhost:5000/api/fo-portal/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
-      const data = await resp.json();
-      if (!resp.ok || !data.success) {
+      
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        // Store field officer token and user data in localStorage
+        localStorage.setItem('fieldOfficerToken', data.token);
+        localStorage.setItem('fieldOfficerUser', JSON.stringify(data.user));
+        
+        navigate('/field-officer/dashboard');
+      } else {
         setError(data.message || 'Login failed');
-        return;
       }
-      localStorage.setItem('fieldOfficerToken', data.token);
-      localStorage.setItem('fieldOfficerUser', JSON.stringify(data.user));
-      navigate('/field-officer/dashboard');
     } catch (err) {
-      setError('Login failed');
+      setError('Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Container maxWidth="xs" sx={{ mt: 8 }}>
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Field Officer Login</Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <TextField label="Email" name="email" value={formData.email} onChange={handleChange} fullWidth />
-          <TextField label="Password" name="password" type="password" value={formData.password} onChange={handleChange} fullWidth />
-          {error && (
-            <Typography color="error" variant="body2">{error}</Typography>
-          )}
-          <Button variant="contained" onClick={handleLogin} disabled={loading}>
-            {loading ? <CircularProgress size={20} /> : 'Login'}
-          </Button>
+    <Container maxWidth="sm" sx={{ mt: 8 }}>
+      <Paper elevation={3} sx={{ p: 4 }}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
+          <AccountCircleIcon sx={{ fontSize: 48, color: 'primary.main', mb: 2 }} />
+          <Typography variant="h4" component="h1" gutterBottom>
+            Field Officer Portal
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Sign in to view and manage your cases
+          </Typography>
         </Box>
+
+        {error && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <TextField
+            fullWidth
+            label="Email"
+            name="email"
+            type="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            sx={{ mb: 2 }}
+            autoComplete="email"
+          />
+          
+          <TextField
+            fullWidth
+            label="Password"
+            name="password"
+            type="password"
+            value={formData.password}
+            onChange={handleChange}
+            required
+            sx={{ mb: 3 }}
+            autoComplete="current-password"
+          />
+
+          <Button
+            fullWidth
+            type="submit"
+            variant="contained"
+            size="large"
+            disabled={loading}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Sign In'}
+          </Button>
+        </form>
       </Paper>
     </Container>
   );

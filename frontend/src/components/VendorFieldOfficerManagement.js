@@ -32,6 +32,7 @@ import {
   MoreVert as MoreVertIcon
 } from '@mui/icons-material';
 import axios from 'axios';
+import PasswordField from './PasswordField';
 
 const VendorFieldOfficerManagement = () => {
   const [fieldOfficers, setFieldOfficers] = useState([]);
@@ -42,7 +43,7 @@ const VendorFieldOfficerManagement = () => {
   const [editingId, setEditingId] = useState(null);
   const [anchorEl, setAnchorEl] = useState(null);
   const [selectedOfficer, setSelectedOfficer] = useState(null);
-  const [vendorName, setVendorName] = useState('');
+  const [passwordValid, setPasswordValid] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -52,21 +53,7 @@ const VendorFieldOfficerManagement = () => {
 
   useEffect(() => {
     fetchFieldOfficers();
-    fetchVendorInfo();
   }, []);
-
-  const fetchVendorInfo = async () => {
-    try {
-      const vendorToken = localStorage.getItem('vendorToken');
-      const vendorUser = localStorage.getItem('vendorUser');
-      if (vendorUser) {
-        const user = JSON.parse(vendorUser);
-        setVendorName(user.company || '');
-      }
-    } catch (err) {
-      console.error('Error fetching vendor info:', err);
-    }
-  };
 
   const fetchFieldOfficers = async () => {
     try {
@@ -88,12 +75,8 @@ const VendorFieldOfficerManagement = () => {
   const handleOpenDialog = (officer = null) => {
     if (officer) {
       setEditingId(officer.id);
-      setFormData({
-        name: officer.name,
-        email: officer.email,
-        phoneNumber: officer.phoneNumber,
-        password: ''
-      });
+      setFormData({ ...officer, password: '' });
+      setPasswordValid(true); // editing mode doesn't require password
     } else {
       setEditingId(null);
       setFormData({
@@ -102,6 +85,7 @@ const VendorFieldOfficerManagement = () => {
         phoneNumber: '',
         password: ''
       });
+      setPasswordValid(false);
     }
     setOpenDialog(true);
   };
@@ -109,7 +93,6 @@ const VendorFieldOfficerManagement = () => {
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setEditingId(null);
-    setError('');
   };
 
   const handleChange = (e) => {
@@ -237,10 +220,8 @@ const VendorFieldOfficerManagement = () => {
             <TableHead>
               <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
                 <TableCell><strong>Name</strong></TableCell>
-                <TableCell><strong>Name</strong></TableCell>
                 <TableCell><strong>Email</strong></TableCell>
                 <TableCell><strong>Phone</strong></TableCell>
-                <TableCell><strong>Vendor</strong></TableCell>
                 <TableCell><strong>Status</strong></TableCell>
                 <TableCell align="center"><strong>Actions</strong></TableCell>
               </TableRow>
@@ -260,7 +241,6 @@ const VendorFieldOfficerManagement = () => {
                     <TableCell>{officer.name}</TableCell>
                     <TableCell>{officer.email}</TableCell>
                     <TableCell>{officer.phoneNumber}</TableCell>
-                    <TableCell>{vendorName}</TableCell>
                     <TableCell>
                       <Chip
                         label={officer.status === 'active' ? 'Active' : 'Inactive'}
@@ -310,7 +290,7 @@ const VendorFieldOfficerManagement = () => {
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField
               fullWidth
-              label="Full Name"
+              label="Name"
               name="name"
               value={formData.name}
               onChange={handleChange}
@@ -324,7 +304,7 @@ const VendorFieldOfficerManagement = () => {
               value={formData.email}
               onChange={handleChange}
               required
-              disabled={editingId}
+              disabled={editingId} // Don't allow email change
             />
             <TextField
               fullWidth
@@ -334,21 +314,17 @@ const VendorFieldOfficerManagement = () => {
               onChange={handleChange}
               required
             />
-            <TextField
-              fullWidth
-              label="Vendor"
-              value={vendorName}
-              disabled
-            />
-            <TextField
-              fullWidth
-              label="Password"
-              name="password"
-              type="password"
+            <PasswordField
               value={formData.password}
               onChange={handleChange}
+              name="password"
+              label="Password"
               required={!editingId}
-              helperText={editingId ? "Leave blank to keep current password" : ""}
+              helperText={editingId ? 'Leave blank to keep current password' : ''}
+              email={formData.email}
+              editMode={!!editingId}
+              showValidation
+              onValidityChange={setPasswordValid}
             />
           </Box>
         </DialogContent>
@@ -357,7 +333,14 @@ const VendorFieldOfficerManagement = () => {
           <Button
             onClick={handleSubmit}
             variant="contained"
-            disabled={loading || !formData.name || !formData.email || !formData.phoneNumber}
+            disabled={
+              loading ||
+              !formData.name ||
+              !formData.email ||
+              !formData.phoneNumber ||
+              (!editingId && (!formData.password || !passwordValid)) ||
+              (editingId && formData.password && !passwordValid)
+            }
           >
             {editingId ? 'Update' : 'Create'}
           </Button>

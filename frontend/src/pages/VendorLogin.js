@@ -108,12 +108,6 @@ const VendorLogin = () => {
             {loading ? <CircularProgress size={24} /> : 'Sign In'}
           </Button>
         </form>
-
-        <Box sx={{ mt: 3, textAlign: 'center' }}>
-          <Typography variant="body2" color="text.secondary">
-            Admin? <Button onClick={() => navigate('/login')}>Login here</Button>
-          </Typography>
-        </Box>
       </Paper>
     </Container>
   );
