@@ -31,6 +31,7 @@ import {
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
+import PasswordField from './PasswordField';
 
 const VendorManagement = () => {
   const { token, loading: authLoading } = useAuth();
@@ -47,6 +48,7 @@ const VendorManagement = () => {
     phoneNumber: '',
     password: ''
   });
+  const [passwordValid, setPasswordValid] = useState(false);
 
   useEffect(() => {
     console.log('VendorManagement useEffect: token=', !!token, 'authLoading=', authLoading);
@@ -100,6 +102,7 @@ const VendorManagement = () => {
         password: ''
       });
       setEditMode(true);
+      setPasswordValid(true);
     } else {
       setFormData({
         name: '',
@@ -109,6 +112,7 @@ const VendorManagement = () => {
         password: ''
       });
       setEditMode(false);
+      setPasswordValid(false);
     }
     setDialogOpen(true);
   };
@@ -322,22 +326,27 @@ const VendorManagement = () => {
                 />
               </Grid>
               <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Password"
-                  name="password"
-                  type="password"
+                <PasswordField
                   value={formData.password}
                   onChange={handleInputChange}
+                  name="password"
+                  label="Password"
                   required={!editMode}
                   helperText={editMode ? "Leave blank to keep current password" : ""}
+                  email={formData.email}
+                  editMode={editMode}
+                  showValidation
+                  onValidityChange={setPasswordValid}
                 />
               </Grid>
             </Grid>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleCloseDialog}>Cancel</Button>
-            <Button type="submit" variant="contained">
+            <Button type="submit" variant="contained" disabled={
+              (!editMode && (!formData.password || !passwordValid)) ||
+              (editMode && formData.password && !passwordValid)
+            }>
               {editMode ? 'Update' : 'Create'}
             </Button>
           </DialogActions>

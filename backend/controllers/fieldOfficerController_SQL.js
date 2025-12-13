@@ -2,12 +2,23 @@ const FieldOfficer = require('../models/FieldOfficer_SQL');
 const Vendor = require('../models/Vendor_SQL');
 const Record = require('../models/Record_SQL');
 const Verification = require('../models/Verification_SQL');
+const { validatePassword } = require('../utils/passwordValidation');
 const { Op } = require('sequelize');
 
 // Create field officer
 exports.createFieldOfficer = async (req, res) => {
     try {
         const { name, email, phoneNumber, password, vendor } = req.body;
+        
+        // Validate password
+        const passwordValidation = validatePassword(password, email);
+        if (!passwordValidation.isValid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password validation failed',
+                errors: passwordValidation.errors
+            });
+        }
         
         // Validate vendor exists and is active
         const vendorDoc = await Vendor.findByPk(vendor);
@@ -175,6 +186,25 @@ exports.updateFieldOfficer = async (req, res) => {
             updateData.vendorName = vendorDoc.company;
         }
         
+        // If password provided, validate and enforce simple reuse policy
+        if (updateData.password) {
+            const passwordValidation = validatePassword(updateData.password, updateData.email || fieldOfficer.email);
+            if (!passwordValidation.isValid) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Password validation failed',
+                    errors: passwordValidation.errors
+                });
+            }
+            // Disallow setting the same password as current
+            if (updateData.password === fieldOfficer.password) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'New password cannot be the same as current password'
+                });
+            }
+        }
+
         await fieldOfficer.update(updateData);
         
         res.json({

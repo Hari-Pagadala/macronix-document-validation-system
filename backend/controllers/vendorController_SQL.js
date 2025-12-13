@@ -1,10 +1,21 @@
 const Vendor = require('../models/Vendor_SQL');
 const FieldOfficer = require('../models/FieldOfficer_SQL');
+const { validatePassword } = require('../utils/passwordValidation');
 
 // Create vendor
 exports.createVendor = async (req, res) => {
     try {
         const { name, company, email, phoneNumber, password } = req.body;
+        
+        // Validate password
+        const passwordValidation = validatePassword(password, email);
+        if (!passwordValidation.isValid) {
+            return res.status(400).json({
+                success: false,
+                message: 'Password validation failed',
+                errors: passwordValidation.errors
+            });
+        }
         
         // Check if vendor already exists
         const existingVendor = await Vendor.findOne({ where: { email } });
@@ -149,6 +160,25 @@ exports.updateVendor = async (req, res) => {
             }
         }
         
+        // If password provided, validate and enforce simple reuse policy
+        if (updateData.password) {
+            const passwordValidation = validatePassword(updateData.password, updateData.email || vendor.email);
+            if (!passwordValidation.isValid) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Password validation failed',
+                    errors: passwordValidation.errors
+                });
+            }
+            // Disallow setting the same password as current
+            if (updateData.password === vendor.password) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'New password cannot be the same as current password'
+                });
+            }
+        }
+
         await vendor.update(updateData);
         
         res.json({
