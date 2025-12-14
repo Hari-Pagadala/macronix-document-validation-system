@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Paper, Table, TableHead, TableRow, TableCell, TableBody, TableContainer, TablePagination, Box, TextField, InputAdornment, Chip, IconButton, CircularProgress, Typography, Button } from '@mui/material';
-import { Search as SearchIcon, MoreVert as MoreVertIcon, Visibility as ViewIcon } from '@mui/icons-material';
+import { Search as SearchIcon, MoreVert as MoreVertIcon, Visibility as ViewIcon, AccessTime as AccessTimeIcon, Warning as WarningIcon } from '@mui/icons-material';
 import SubmitVerificationModal from './SubmitVerificationModal';
 import axios from 'axios';
 
@@ -10,6 +10,39 @@ const statusConfig = {
   approved: { color: 'success', label: 'APPROVED' },
   insufficient: { color: 'warning', label: 'INSUFFICIENT' },
   rejected: { color: 'error', label: 'REJECTED' }
+};
+
+const getTATStatus = (tatDueDate) => {
+  if (!tatDueDate) return { status: 'N/A', color: 'default', icon: null };
+  
+  const dueDate = new Date(tatDueDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  dueDate.setHours(0, 0, 0, 0);
+  
+  if (today > dueDate) {
+    return { 
+      status: 'BREACHED', 
+      color: 'error', 
+      icon: <WarningIcon sx={{ fontSize: '0.875rem', mr: 0.5 }} />,
+      daysOverdue: Math.floor((today - dueDate) / (1000 * 60 * 60 * 24))
+    };
+  } else if (today.getTime() === dueDate.getTime()) {
+    return { 
+      status: 'DUE TODAY', 
+      color: 'warning', 
+      icon: <AccessTimeIcon sx={{ fontSize: '0.875rem', mr: 0.5 }} />,
+      daysDue: 0
+    };
+  } else {
+    const daysLeft = Math.floor((dueDate - today) / (1000 * 60 * 60 * 24));
+    return { 
+      status: 'WITHIN TAT', 
+      color: 'success', 
+      icon: <AccessTimeIcon sx={{ fontSize: '0.875rem', mr: 0.5 }} />,
+      daysLeft
+    };
+  }
 };
 
 const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
@@ -96,14 +129,20 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
                   <TableCell><strong>Contact</strong></TableCell>
                   <TableCell><strong>Location</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
+                  {status !== 'approved' && (
+                    <TableCell><strong>TAT Status</strong></TableCell>
+                  )}
                   <TableCell><strong>Created</strong></TableCell>
+                  {status === 'approved' && (
+                    <TableCell><strong>Completed Date</strong></TableCell>
+                  )}
                   {status === 'assigned' && <TableCell><strong>Actions</strong></TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {records.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={status === 'assigned' ? 8 : 7} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={status === 'assigned' ? 9 : (status === 'approved' ? 9 : 8)} align="center" sx={{ py: 3 }}>
                       <Typography color="text.secondary">No cases found</Typography>
                     </TableCell>
                   </TableRow>
@@ -114,6 +153,8 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
                     const displayContact = record.contactNumber || 'N/A';
                     const displayLocation = [record.district, record.state].filter(Boolean).join(', ') || 'N/A';
                     const displayCase = record.caseNumber || record.referenceNumber || 'N/A';
+                    const tatStatus = getTATStatus(record.tatDueDate);
+                    
                     return (
                       <TableRow key={record.id} hover>
                         <TableCell><strong>{displayCase}</strong></TableCell>
@@ -128,7 +169,21 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
                         <TableCell>
                           <Chip label={statusInfo.label} color={statusInfo.color} size="small" variant="outlined" />
                         </TableCell>
+                        {status !== 'approved' && (
+                          <TableCell>
+                            <Chip 
+                              icon={tatStatus.icon}
+                              label={tatStatus.status === 'N/A' ? 'N/A' : `${tatStatus.status}${tatStatus.daysLeft !== undefined ? ` (${tatStatus.daysLeft}d)` : tatStatus.daysOverdue !== undefined ? ` (${tatStatus.daysOverdue}d)` : ''}`}
+                              color={tatStatus.color} 
+                              size="small" 
+                              variant="outlined"
+                            />
+                          </TableCell>
+                        )}
                         <TableCell>{formatDate(record.createdAt)}</TableCell>
+                        {status === 'approved' && (
+                          <TableCell>{formatDate(record.completionDate)}</TableCell>
+                        )}
                         {status === 'assigned' && (
                           <TableCell>
                             <Button variant="contained" size="small" onClick={() => openSubmit(record)}>Submit Details</Button>

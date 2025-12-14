@@ -13,18 +13,18 @@ async function initialize() {
         console.log('✅ Database tables created/synchronized');
         
         // Create admin user
-        const existingAdmin = await User.findOne({ where: { email: 'admin@example.com' } });
+        const existingAdmin = await User.findOne({ where: { email: 'purna@macronix.com' } });
         
         if (!existingAdmin) {
             const admin = await User.create({
-                name: 'Super Admin',
-                email: 'admin@example.com',
-                password: 'admin123',
+                name: 'Purna Admin',
+                email: 'purna@macronix.com',
+                password: 'December@2025',
                 role: 'super_admin'
             });
             console.log('✅ Super Admin created successfully!');
-            console.log('📧 Email: admin@example.com');
-            console.log('🔑 Password: admin123');
+            console.log('📧 Email: purna@macronix.com');
+            console.log('🔑 Password: December@2025');
         } else {
             console.log('⚠️  Admin user already exists');
         }

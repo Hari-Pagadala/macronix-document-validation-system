@@ -44,6 +44,8 @@ const ManualEntryPage = () => {
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [generatedRef, setGeneratedRef] = useState('');
+    const [contactNumberError, setContactNumberError] = useState('');
+    const [pincodeError, setPincodeError] = useState('');
 
     const handleMenuOpen = (event) => {
         setAnchorEl(event.currentTarget);
@@ -60,10 +62,32 @@ const ManualEntryPage = () => {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        let newValue = value;
+        let contactError = '';
+        let pincodeError = '';
+
+        if (name === 'contactNumber') {
+            // Remove non-numeric characters
+            newValue = value.replace(/[^0-9]/g, '');
+            // Validate exactly 10 digits
+            if (newValue.length > 0 && newValue.length !== 10) {
+                contactError = 'Contact number must be exactly 10 digits';
+            }
+        } else if (name === 'pincode') {
+            // Remove non-numeric characters
+            newValue = value.replace(/[^0-9]/g, '');
+        }
+
         setFormData(prev => ({
             ...prev,
-            [name]: value
+            [name]: newValue
         }));
+        
+        if (name === 'contactNumber') {
+            setContactNumberError(contactError);
+        } else if (name === 'pincode') {
+            setPincodeError(pincodeError);
+        }
     };
 
     const handleSubmit = async (e) => {
@@ -71,6 +95,22 @@ const ManualEntryPage = () => {
         setLoading(true);
         setError('');
         setMessage('');
+
+        // Validate Contact Number
+        if (!formData.contactNumber || formData.contactNumber.length !== 10) {
+            setContactNumberError('Contact number must be exactly 10 digits');
+            setError('Please fix validation errors before submitting');
+            setLoading(false);
+            return;
+        }
+
+        // Validate PIN Code (must be numeric)
+        if (formData.pincode && !/^\d+$/.test(formData.pincode)) {
+            setPincodeError('PIN code must contain only numeric characters');
+            setError('Please fix validation errors before submitting');
+            setLoading(false);
+            return;
+        }
 
         try {
             const token = localStorage.getItem('token');
@@ -93,6 +133,8 @@ const ManualEntryPage = () => {
                 pincode: '',
                 remarks: ''
             });
+            setContactNumberError('');
+            setPincodeError('');
 
             // Auto-clear message after 3 seconds
             setTimeout(() => setMessage(''), 3000);
@@ -212,7 +254,16 @@ const ManualEntryPage = () => {
                                 name="contactNumber"
                                 value={formData.contactNumber}
                                 onChange={handleChange}
+                                onKeyDown={(ev) => {
+                                    if (!/^[0-9]$/.test(ev.key) && !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight'].includes(ev.key)) {
+                                        ev.preventDefault();
+                                    }
+                                }}
                                 margin="normal"
+                                required
+                                error={!!contactNumberError}
+                                helperText={contactNumberError}
+                                inputProps={{ maxLength: 10, inputMode: 'numeric' }}
                             />
                         </Grid>
                         <Grid item xs={12} sm={6}>
@@ -265,7 +316,15 @@ const ManualEntryPage = () => {
                                 name="pincode"
                                 value={formData.pincode}
                                 onChange={handleChange}
+                                onKeyDown={(ev) => {
+                                    if (!/^[0-9]$/.test(ev.key) && !['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight'].includes(ev.key)) {
+                                        ev.preventDefault();
+                                    }
+                                }}
                                 margin="normal"
+                                error={!!pincodeError}
+                                helperText={pincodeError}
+                                inputProps={{ inputMode: 'numeric' }}
                             />
                         </Grid>
                         <Grid item xs={12}>
@@ -287,7 +346,7 @@ const ManualEntryPage = () => {
                         variant="contained"
                         color="primary"
                         sx={{ mt: 2 }}
-                        disabled={loading}
+                        disabled={loading || !!contactNumberError || formData.contactNumber.length !== 10 || (formData.pincode && !/^\d+$/.test(formData.pincode))}
                     >
                         {loading ? 'Creating...' : 'Create Record'}
                     </Button>

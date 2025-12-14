@@ -14,16 +14,16 @@ async function initialize() {
         
         if (!existingAdmin) {
             const admin = new User({
-                name: 'Super Admin',
-                email: 'admin@example.com',
-                password: 'admin123',
+                name: 'Purna Admin',
+                email: 'purna@macronix.com',
+                password: 'December@2025',
                 role: 'super_admin'
             });
             
             await admin.save();
             console.log('✅ Super Admin created successfully!');
-            console.log('📧 Email: admin@example.com');
-            console.log('🔑 Password: admin123');
+            console.log('📧 Email: purna@macronix.com');
+            console.log('🔑 Password: December@2025');
         } else {
             console.log('⚠️  Admin user already exists');
         }

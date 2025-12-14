@@ -393,6 +393,9 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                   </Grid>
                 </Grid>
               </Box>
+              {record.completionDate && (
+                <DetailRow label="Case Completed Date" value={formatDate(record.completionDate)} />
+              )}
             </Paper>
 
             {/* Verification Details */}

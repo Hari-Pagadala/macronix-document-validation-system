@@ -206,20 +206,25 @@ const RecordsTable = ({ status = 'all' }) => {
                 <TableCell sx={{ fontWeight: 'bold' }}>Location</TableCell>
                 <TableCell sx={{ fontWeight: 'bold', width: 140 }}>Status</TableCell>
                 <TableCell sx={{ fontWeight: 'bold', width: 100 }}>Created</TableCell>
-                <TableCell sx={{ fontWeight: 'bold', width: 120 }}>TAT Status</TableCell>
+                {status === 'approved' && (
+                  <TableCell sx={{ fontWeight: 'bold', width: 120 }}>Completed Date</TableCell>
+                )}
+                {status !== 'approved' && (
+                  <TableCell sx={{ fontWeight: 'bold', width: 120 }}>TAT Status</TableCell>
+                )}
                 <TableCell sx={{ fontWeight: 'bold', width: 100 }} align="center">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading && records.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={status === 'approved' ? 10 : 9} align="center" sx={{ py: 3 }}>
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : records.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={status === 'approved' ? 10 : 9} align="center" sx={{ py: 3 }}>
                     <Typography color="textSecondary">
                       No records found
                     </Typography>
@@ -293,26 +298,30 @@ const RecordsTable = ({ status = 'all' }) => {
                         )}
                       </TableCell>
                       <TableCell>{formatDate(record.createdAt)}</TableCell>
-                      <TableCell>
-                        {tatStatus ? (
-                          <Chip
-                            icon={<WarningIcon />}
-                            label={tatStatus.label}
-                            color={
-                              tatStatus.type === 'breached' ? 'error' :
-                              tatStatus.type === 'due-today' ? 'error' :
-                              tatStatus.type === 'urgent' ? 'error' :
-                              tatStatus.type === 'warning' ? 'warning' :
-                              'success'
-                            }
-                            size="small"
-                          />
-                        ) : (
-                          <Typography variant="caption" color="textSecondary">
-                            N/A
-                          </Typography>
-                        )}
-                      </TableCell>
+                      {status === 'approved' ? (
+                        <TableCell>{formatDate(record.completionDate)}</TableCell>
+                      ) : (
+                        <TableCell>
+                          {tatStatus ? (
+                            <Chip
+                              icon={<WarningIcon />}
+                              label={tatStatus.label}
+                              color={
+                                tatStatus.type === 'breached' ? 'error' :
+                                tatStatus.type === 'due-today' ? 'error' :
+                                tatStatus.type === 'urgent' ? 'error' :
+                                tatStatus.type === 'warning' ? 'warning' :
+                                'success'
+                              }
+                              size="small"
+                            />
+                          ) : (
+                            <Typography variant="caption" color="textSecondary">
+                              N/A
+                            </Typography>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell align="center">
                         <IconButton
                           size="small"

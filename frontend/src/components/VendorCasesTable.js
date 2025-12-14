@@ -238,14 +238,19 @@ const VendorCasesTable = ({ status = 'all', onUpdate }) => {
                   <TableCell><strong>Location</strong></TableCell>
                   <TableCell><strong>Status</strong></TableCell>
                   <TableCell><strong>Created</strong></TableCell>
-                  <TableCell><strong>TAT Status</strong></TableCell>
+                  {status === 'approved' && (
+                    <TableCell><strong>Completed Date</strong></TableCell>
+                  )}
+                  {status !== 'approved' && (
+                    <TableCell><strong>TAT Status</strong></TableCell>
+                  )}
                   <TableCell align="center"><strong>Actions</strong></TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {records.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={status === 'approved' ? 10 : 9} align="center" sx={{ py: 3 }}>
                       <Typography color="text.secondary">
                         No cases found
                       </Typography>
@@ -295,25 +300,29 @@ const VendorCasesTable = ({ status = 'all', onUpdate }) => {
                           )}
                         </TableCell>
                         <TableCell>{formatDate(record.createdAt)}</TableCell>
-                        <TableCell>
-                          {tatStatus ? (
-                            <Chip
-                              label={tatStatus.label}
-                              color={
-                                tatStatus.type === 'breached' ? 'error' :
-                                tatStatus.type === 'due-today' ? 'error' :
-                                tatStatus.type === 'urgent' ? 'error' :
-                                tatStatus.type === 'warning' ? 'warning' :
-                                'success'
-                              }
-                              size="small"
-                            />
-                          ) : (
-                            <Typography variant="caption" color="text.secondary">
-                              N/A
-                            </Typography>
-                          )}
-                        </TableCell>
+                        {status === 'approved' ? (
+                          <TableCell>{formatDate(record.completionDate)}</TableCell>
+                        ) : (
+                          <TableCell>
+                            {tatStatus ? (
+                              <Chip
+                                label={tatStatus.label}
+                                color={
+                                  tatStatus.type === 'breached' ? 'error' :
+                                  tatStatus.type === 'due-today' ? 'error' :
+                                  tatStatus.type === 'urgent' ? 'error' :
+                                  tatStatus.type === 'warning' ? 'warning' :
+                                  'success'
+                                }
+                                size="small"
+                              />
+                            ) : (
+                              <Typography variant="caption" color="text.secondary">
+                                N/A
+                              </Typography>
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell align="center">
                           <IconButton
                             size="small"

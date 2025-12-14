@@ -13,8 +13,8 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
-  const [email, setEmail] = useState('admin@example.com');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('purna@macronix.com');
+  const [password, setPassword] = useState('December@2025');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -100,7 +100,7 @@ const Login = () => {
           </form>
 
           <Typography variant="body2" align="center" sx={{ mt: 3, color: 'text.secondary' }}>
-            Default credentials: admin@example.com / admin123
+            {/* Credentials removed for security */}
           </Typography>
         </Paper>
       </Box>
