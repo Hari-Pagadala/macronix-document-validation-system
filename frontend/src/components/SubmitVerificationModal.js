@@ -60,6 +60,7 @@ const SubmitVerificationModal = ({ open, onClose, record, onSubmitted }) => {
   const [submitting, setSubmitting] = useState(false);
   const [geoError, setGeoError] = useState('');
   const [insufficientReason, setInsufficientReason] = useState('');
+  const [respondentContactError, setRespondentContactError] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -77,7 +78,20 @@ const SubmitVerificationModal = ({ open, onClose, record, onSubmitted }) => {
   }, [open]);
 
   const handleFile = (setter) => (e) => setter(Array.from(e.target.files || []));
-  const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    if (name === 'respondentContact') {
+      const digitsOnly = value.replace(/[^0-9]/g, '').slice(0, 10);
+      setForm({ ...form, [name]: digitsOnly });
+      if (digitsOnly.length && digitsOnly.length !== 10) {
+        setRespondentContactError('Contact must be exactly 10 digits');
+      } else {
+        setRespondentContactError('');
+      }
+      return;
+    }
+    setForm({ ...form, [name]: value });
+  };
 
   const displayCaseNumber = record?.caseNumber || record?.referenceNumber || 'N/A';
   const displayName = record?.fullName || [record?.firstName, record?.lastName].filter(Boolean).join(' ').trim() || 'N/A';
@@ -91,6 +105,11 @@ const SubmitVerificationModal = ({ open, onClose, record, onSubmitted }) => {
     }
     if (!form.verificationDate || !form.ownershipType || !officerSig || !respondentSig) {
       alert('Please fill required fields and signatures');
+      return false;
+    }
+    if (!form.respondentContact || form.respondentContact.length !== 10) {
+      setRespondentContactError('Contact must be exactly 10 digits');
+      alert('Respondent contact must be exactly 10 numeric digits');
       return false;
     }
     if (action === 'insufficient' && !insufficientReason.trim()) {
@@ -175,7 +194,16 @@ const SubmitVerificationModal = ({ open, onClose, record, onSubmitted }) => {
           <Grid container spacing={2} sx={{ mt: 1 }}>
             <Grid item xs={6}><TextField label="Respondent Name" name="respondentName" value={form.respondentName} onChange={handleChange} fullWidth /></Grid>
             <Grid item xs={6}><TextField label="Relationship with Candidate" name="respondentRelationship" value={form.respondentRelationship} onChange={handleChange} fullWidth /></Grid>
-            <Grid item xs={6}><TextField label="Respondent Contact" name="respondentContact" value={form.respondentContact} onChange={handleChange} fullWidth /></Grid>
+            <Grid item xs={6}><TextField label="Respondent Contact" name="respondentContact" value={form.respondentContact} onChange={handleChange} fullWidth
+              onKeyDown={(ev) => {
+                if (!/^[0-9]$/.test(ev.key) && !['Backspace','Delete','Tab','ArrowLeft','ArrowRight'].includes(ev.key)) {
+                  ev.preventDefault();
+                }
+              }}
+              inputProps={{ maxLength: 10, inputMode: 'numeric' }}
+              error={!!respondentContactError}
+              helperText={respondentContactError}
+            /></Grid>
             <Grid item xs={6}><TextField label="Period of Stay" name="periodOfStay" value={form.periodOfStay} onChange={handleChange} fullWidth /></Grid>
             <Grid item xs={12} md={6}><TextField select label="Ownership Type" name="ownershipType" value={form.ownershipType} onChange={handleChange} fullWidth InputLabelProps={{ shrink: true }} SelectProps={{ displayEmpty: true, MenuProps: { PaperProps: { sx: { maxHeight: 300, minWidth: '200px' } } } }} sx={{ minWidth: '200px' }}>
               <MenuItem value="" disabled><em>Select type</em></MenuItem>
