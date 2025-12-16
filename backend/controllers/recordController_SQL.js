@@ -108,81 +108,175 @@ exports.bulkUpload = async (req, res) => {
             totalRecords: records.length
         };
 
-        // Process each record
+        // Validation helpers
+        const norm = (v) => v === undefined || v === null ? '' : v.toString().replace(/\s+/g, ' ').trim();
+        const isAlphaName = (v) => /^[A-Za-z\s'\-]+$/.test(v || '');
+        const seenCaseNumbers = new Set();
+
+        // First pass: validate all rows without creating any records
         for (let i = 0; i < records.length; i++) {
-            const record = records[i];
-            try {
-                // Validate required field
-                if (!record.caseNumber || record.caseNumber.toString().trim() === '') {
-                    results.failed.push({
-                        rowNumber: i + 2, // Row number in Excel (1-indexed + header)
-                        caseNumber: record.caseNumber,
-                        error: 'Case Number is required'
-                    });
-                    continue;
-                }
+            const rowNum = i + 2;
+            const r = records[i] || {};
 
-                // Check if case number already exists
-                const existingCase = await Record.findOne({
-                    where: { caseNumber: record.caseNumber.toString().trim() }
-                });
+            const caseNumber = norm(r.caseNumber);
+            const firstName = norm(r.firstName);
+            const lastName = norm(r.lastName);
+            const contactNumberRaw = (r.contactNumber || '').toString();
+            const contactNumber = contactNumberRaw.replace(/[^0-9]/g, '');
+            const email = norm(r.email);
+            const address = norm(r.address);
+            const state = norm(r.state);
+            const district = norm(r.district);
+            const pincodeRaw = (r.pincode || r.pin || '').toString();
+            const pincode = pincodeRaw.replace(/[^0-9]/g, '');
 
-                if (existingCase) {
-                    results.failed.push({
-                        rowNumber: i + 2,
-                        caseNumber: record.caseNumber,
-                        error: 'Case Number already exists'
-                    });
-                    continue;
-                }
+            // Mandatory fields check
+            if (!caseNumber) {
+                results.failed.push({ rowNumber: rowNum, caseNumber: caseNumber || null, error: 'Case Number is required' });
+                continue;
+            }
+            if (!firstName) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'First Name is required' });
+                continue;
+            }
+            if (!lastName) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'Last Name is required' });
+                continue;
+            }
+            if (!contactNumber) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'Contact Number is required' });
+                continue;
+            }
+            if (!address) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'Address is required' });
+                continue;
+            }
+            if (!state) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'State is required' });
+                continue;
+            }
+            if (!district) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'District is required' });
+                continue;
+            }
+            if (!pincode) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'Pincode is required' });
+                continue;
+            }
 
-                // Generate reference number
-                const referenceNumber = await generateReferenceNumber();
+            // Phone validation
+            if (!/^[0-9]{10}$/.test(contactNumber)) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'Contact Number must be numeric and exactly 10 digits' });
+                continue;
+            }
 
-                // Create full name
-                const firstName = (record.firstName || '').toString().trim();
-                const lastName = (record.lastName || '').toString().trim();
-                const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+            // Pincode validation (6 digits)
+            if (!/^[0-9]{6}$/.test(pincode)) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'Pincode must be numeric and exactly 6 digits' });
+                continue;
+            }
 
-                // Create the record
-                const newRecord = await Record.create({
-                    caseNumber: record.caseNumber.toString().trim(),
-                    referenceNumber,
+            // Name/state/district character restrictions
+            if (!isAlphaName(firstName)) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'First Name contains invalid characters' });
+                continue;
+            }
+            if (!isAlphaName(lastName)) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'Last Name contains invalid characters' });
+                continue;
+            }
+            if (!isAlphaName(state)) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'State contains invalid characters' });
+                continue;
+            }
+            if (!isAlphaName(district)) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'District contains invalid characters' });
+                continue;
+            }
+
+            // Duplicate within file
+            if (seenCaseNumbers.has(caseNumber)) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'Duplicate Case Number in uploaded file' });
+                continue;
+            }
+            seenCaseNumbers.add(caseNumber);
+
+            // Check DB for existing case number
+            const existingCase = await Record.findOne({ where: { caseNumber } });
+            if (existingCase) {
+                results.failed.push({ rowNumber: rowNum, caseNumber, error: 'Case Number already exists in system' });
+                continue;
+            }
+
+            // If passed validation, push a normalized version for creation later
+            results.success.push({
+                rowNumber: rowNum,
+                data: {
+                    caseNumber,
                     firstName,
                     lastName,
-                    fullName: fullName || 'N/A',
-                    contactNumber: (record.contactNumber || '').toString().trim(),
-                    email: (record.email || '').toString().trim(),
-                    address: (record.address || '').toString().trim(),
-                    state: (record.state || '').toString().trim(),
-                    district: (record.district || '').toString().trim(),
-                    pincode: (record.pincode || '').toString().trim(),
-                    status: 'pending',
-                    uploadedDate: new Date()
-                });
-
-                results.success.push({
-                    rowNumber: i + 2,
-                    caseNumber: record.caseNumber,
-                    referenceNumber,
-                    message: 'Record created successfully'
-                });
-
-            } catch (error) {
-                console.error(`Error processing row ${i + 2}:`, error);
-                results.failed.push({
-                    rowNumber: i + 2,
-                    caseNumber: record.caseNumber,
-                    error: error.message || 'Unknown error'
-                });
-            }
+                    contactNumber,
+                    email,
+                    address,
+                    state,
+                    district,
+                    pincode
+                }
+            });
         }
 
-        res.json({
-            success: results.failed.length === 0,
-            message: `Upload completed: ${results.success.length} succeeded, ${results.failed.length} failed`,
-            results
-        });
+        // If any validation failures, abort and return detailed report (no partial uploads)
+        if (results.failed.length > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Validation failed: ${results.failed.length} rows invalid`,
+                results
+            });
+        }
+
+        // All rows validated — create records in a transaction
+        const transaction = await Record.sequelize.transaction();
+        try {
+            const created = [];
+            for (const item of results.success) {
+                const r = item.data;
+                const referenceNumber = await generateReferenceNumber();
+                const fullName = [r.firstName, r.lastName].filter(Boolean).join(' ').trim() || 'N/A';
+                const newRecord = await Record.create({
+                    caseNumber: r.caseNumber,
+                    referenceNumber,
+                    firstName: r.firstName,
+                    lastName: r.lastName,
+                    fullName,
+                    contactNumber: r.contactNumber,
+                    email: r.email,
+                    address: r.address,
+                    state: r.state,
+                    district: r.district,
+                    pincode: r.pincode,
+                    status: 'pending',
+                    uploadedDate: new Date()
+                }, { transaction });
+
+                created.push({ rowNumber: item.rowNumber, caseNumber: r.caseNumber, referenceNumber });
+            }
+
+            await transaction.commit();
+
+            res.json({
+                success: true,
+                message: `Upload completed: ${created.length} records created`,
+                results: {
+                    success: created,
+                    failed: [],
+                    totalRecords: records.length
+                }
+            });
+        } catch (err) {
+            await transaction.rollback();
+            console.error('Error creating records in bulk upload:', err);
+            return res.status(500).json({ success: false, message: 'Server error while creating records' });
+        }
 
     } catch (error) {
         console.error('Error in bulk upload:', error);

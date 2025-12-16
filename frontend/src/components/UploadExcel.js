@@ -50,41 +50,59 @@ const UploadExcel = ({ onSuccess }) => {
       return;
     }
 
+    // Basic client-side checks
+    const allowedExt = ['.xlsx'];
+    const name = file.name || '';
+    const ext = name.slice(name.lastIndexOf('.')).toLowerCase();
+    if (!allowedExt.includes(ext)) {
+      setError('Only .xlsx files are accepted');
+      return;
+    }
+    const maxSize = 5 * 1024 * 1024; // 5 MB
+    if (file.size > maxSize) {
+      setError('File size exceeds 5 MB limit');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
     try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const data = e.target.result;
-        const workbook = XLSX.read(data, { type: 'binary' });
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+      // Read file as binary (awaitable)
+      const data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = (e) => reject(e);
+        reader.readAsBinaryString(file);
+      });
 
-        // Map Excel columns to required format
-        const records = jsonData.map((row) => {
-          // Case Number is REQUIRED and must be first column
-          const caseNumber = row['Case Number'] || row['CaseNumber'] || row['Case No'] || '';
-          
-          if (!caseNumber) {
-            throw new Error('Case Number is required in Excel file');
-          }
+      const workbook = XLSX.read(data, { type: 'binary' });
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
-          return {
-            caseNumber: caseNumber.toString().trim(),
-            firstName: row['First Name'] || row['FirstName'] || '',
-            lastName: row['Last Name'] || row['LastName'] || '',
-            contactNumber: (row['Contact Number'] || row['ContactNumber'] || row['Phone'] || '').toString(),
-            email: row['Email'] || '',
-            address: row['Address'] || '',
-            state: row['State'] || '',
-            district: row['District'] || '',
-            pincode: (row['Pincode'] || row['PIN Code'] || '').toString()
-          };
-        });
+      // Helper: normalize whitespace and collapse multiple spaces
+      const normalizeText = (v) => v.toString().replace(/\s+/g, ' ').trim();
 
-        // Send to backend
+      // Map Excel columns to required format with normalization
+      const records = jsonData.map((row, idx) => {
+        const caseNumber = row['Case Number'] || row['CaseNumber'] || row['Case No'] || '';
+
+        return {
+          caseNumber: normalizeText(caseNumber),
+          firstName: normalizeText(row['First Name'] || row['FirstName'] || ''),
+          lastName: normalizeText(row['Last Name'] || row['LastName'] || ''),
+          contactNumber: (row['Contact Number'] || row['ContactNumber'] || row['Phone'] || '').toString().replace(/[^0-9]/g, '').slice(0, 10),
+          email: normalizeText(row['Email'] || ''),
+          address: normalizeText(row['Address'] || ''),
+          state: normalizeText(row['State'] || ''),
+          district: normalizeText(row['District'] || ''),
+          pincode: (row['Pincode'] || row['PIN Code'] || '').toString().replace(/[^0-9]/g, '').slice(0, 6)
+        };
+      });
+
+      // Send to backend and handle response/errors
+      try {
         const response = await axios.post('http://localhost:5000/api/records/bulk-upload', {
           records,
           fileName: file.name
@@ -95,14 +113,22 @@ const UploadExcel = ({ onSuccess }) => {
         });
 
         setResult(response.data);
-        
-        if (onSuccess) {
+        if (response.data && response.data.success && onSuccess) {
           onSuccess();
         }
-      };
-      reader.readAsBinaryString(file);
+      } catch (err) {
+        // If server returned structured validation results, show them in UI
+        if (err.response && err.response.data) {
+          setResult(err.response.data);
+        } else {
+          setError(err.response?.data?.message || 'Error uploading file. Please check the format.');
+          console.error('Upload error', err);
+        }
+      }
+
     } catch (err) {
-      setError(err.response?.data?.message || 'Error uploading file. Please check the format.');
+      console.error('File read error', err);
+      setError('Failed reading file: ' + (err.message || err));
     } finally {
       setLoading(false);
     }
@@ -117,6 +143,26 @@ const UploadExcel = ({ onSuccess }) => {
     const a = document.createElement('a');
     a.href = url;
     a.download = `macronix-references-${result.batchId}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadErrorReport = () => {
+    if (!result?.results?.failed?.length) return;
+    const rows = result.results.failed.map(f => ({
+      rowNumber: f.rowNumber,
+      caseNumber: f.caseNumber,
+      error: f.error
+    }));
+    const header = ['Row Number','Case Number','Error'];
+    const csv = [header.join(',')].concat(rows.map(r => `${r.rowNumber},"${(r.caseNumber||'').replace(/"/g,'""')}","${(r.error||'').replace(/"/g,'""')}"`)).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `upload-errors-${Date.now()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -273,6 +319,11 @@ const UploadExcel = ({ onSuccess }) => {
         <DialogActions>
           {result ? (
             <>
+              {result.results?.failed?.length > 0 && (
+                <Button onClick={downloadErrorReport} variant="outlined" color="error">
+                  Download Error Report
+                </Button>
+              )}
               <Button onClick={downloadReferences} variant="outlined">
                 Download References
               </Button>
