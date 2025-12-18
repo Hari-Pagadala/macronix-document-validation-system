@@ -422,9 +422,12 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                   {(verification.documents || []).length === 0 ? (
                     <Typography variant="body2" color="text.secondary">None</Typography>
                   ) : (
-                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
                       {(verification.documents || []).map((file) => (
-                        <a key={file} href={`http://localhost:5000/uploads/fo/${file}`} target="_blank" rel="noreferrer">{file}</a>
+                        <Box key={file} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
+                          <Box component="img" src={`http://localhost:5000/uploads/fo/${file}`} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(`http://localhost:5000/uploads/fo/${file}`, '_blank')} />
+                          <Typography variant="caption" sx={{ display: 'block', p: 0.5, textAlign: 'center', wordBreak: 'break-word', fontSize: '0.75rem' }}>{file}</Typography>
+                        </Box>
                       ))}
                     </Box>
                   )}
@@ -436,11 +439,34 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                   {(verification.photos || []).length === 0 ? (
                     <Typography variant="body2" color="text.secondary">None</Typography>
                   ) : (
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
                       {(verification.photos || []).map((file) => (
-                        <a key={file} href={`http://localhost:5000/uploads/fo/${file}`} target="_blank" rel="noreferrer">{file}</a>
+                        <Box key={file} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
+                          <Box component="img" src={`http://localhost:5000/uploads/fo/${file}`} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(`http://localhost:5000/uploads/fo/${file}`, '_blank')} />
+                          <Typography variant="caption" sx={{ display: 'block', p: 0.5, textAlign: 'center', wordBreak: 'break-word', fontSize: '0.75rem' }}>{file}</Typography>
+                        </Box>
                       ))}
                     </Box>
+                  )}
+                </Box>
+                <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
+                    Selfie Photo with House
+                  </Typography>
+                  {verification.selfieWithHousePath ? (
+                    <Box component="img" src={`http://localhost:5000/uploads/fo/${verification.selfieWithHousePath}`} alt="Selfie with House" sx={{ maxWidth: '100%', maxHeight: '300px', border: '1px solid #eee', mt: 1, cursor: 'pointer' }} />
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">Not provided</Typography>
+                  )}
+                </Box>
+                <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
+                    Candidate with Respondent Photo
+                  </Typography>
+                  {verification.candidateWithRespondentPath ? (
+                    <Box component="img" src={`http://localhost:5000/uploads/fo/${verification.candidateWithRespondentPath}`} alt="Candidate with Respondent" sx={{ maxWidth: '100%', maxHeight: '300px', border: '1px solid #eee', mt: 1, cursor: 'pointer' }} />
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">Not provided</Typography>
                   )}
                 </Box>
                 <Box sx={{ py: 1.5 }}>

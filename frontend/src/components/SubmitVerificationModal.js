@@ -55,6 +55,8 @@ const SubmitVerificationModal = ({ open, onClose, record, onSubmitted }) => {
   const [gps, setGps] = useState({ lat: '', lng: '' });
   const [documents, setDocuments] = useState([]);
   const [photos, setPhotos] = useState([]);
+  const [selfieWithHouse, setSelfieWithHouse] = useState([]);
+  const [candidateWithRespondent, setCandidateWithRespondent] = useState([]);
   const [officerSig, setOfficerSig] = useState(null);
   const [respondentSig, setRespondentSig] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -112,6 +114,14 @@ const SubmitVerificationModal = ({ open, onClose, record, onSubmitted }) => {
       alert('Respondent contact must be exactly 10 numeric digits');
       return false;
     }
+    if (selfieWithHouse.length === 0) {
+      alert('Selfie Photo with House is required');
+      return false;
+    }
+    if (candidateWithRespondent.length === 0) {
+      alert('Candidate with Respondent Photo is required');
+      return false;
+    }
     if (action === 'insufficient' && !insufficientReason.trim()) {
       alert('Please provide the insufficiency reason.');
       return false;
@@ -138,6 +148,8 @@ const SubmitVerificationModal = ({ open, onClose, record, onSubmitted }) => {
       fd.append('action', action);
       documents.forEach(f => fd.append('documents', f));
       photos.forEach(f => fd.append('photos', f));
+      selfieWithHouse.forEach(f => fd.append('selfieWithHouse', f));
+      candidateWithRespondent.forEach(f => fd.append('candidateWithRespondent', f));
       // Convert signatures dataURL to blobs
       const dataURLToBlob = (dataURL) => {
         const parts = dataURL.split(',');
@@ -224,6 +236,18 @@ const SubmitVerificationModal = ({ open, onClose, record, onSubmitted }) => {
             <Grid item xs={12}>
               <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, display: 'block' }}>House Photographs</Typography>
               <TextField type="file" inputProps={{ multiple: true }} onChange={handleFile(setPhotos)} fullWidth InputLabelProps={{ shrink: true }} />
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="caption" color="error" sx={{ mb: 0.5, display: 'block', fontWeight: '600' }}>Selfie Photo with House *</Typography>
+              <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>Upload a selfie taken in front of the candidate's house for on-site presence validation</Typography>
+              <TextField type="file" inputProps={{ accept: 'image/*', multiple: false }} onChange={handleFile(setSelfieWithHouse)} fullWidth InputLabelProps={{ shrink: true }} />
+              {selfieWithHouse.length > 0 && <Typography variant="caption" color="success">✓ {selfieWithHouse[0].name}</Typography>}
+            </Grid>
+            <Grid item xs={12}>
+              <Typography variant="caption" color="error" sx={{ mb: 0.5, display: 'block', fontWeight: '600' }}>Candidate with Respondent Photo *</Typography>
+              <Typography variant="caption" sx={{ display: 'block', mb: 1 }}>Upload a photo showing both the candidate and the respondent together</Typography>
+              <TextField type="file" inputProps={{ accept: 'image/*', multiple: false }} onChange={handleFile(setCandidateWithRespondent)} fullWidth InputLabelProps={{ shrink: true }} />
+              {candidateWithRespondent.length > 0 && <Typography variant="caption" color="success">✓ {candidateWithRespondent[0].name}</Typography>}
             </Grid>
           </Grid>
         </Box>

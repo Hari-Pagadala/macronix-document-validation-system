@@ -38,10 +38,12 @@ router.post(
 	upload.fields([
 		{ name: 'documents', maxCount: 10 },
 		{ name: 'photos', maxCount: 10 },
-		{ name: 'officerSignature', maxCount: 1 },
-		{ name: 'respondentSignature', maxCount: 1 }
-	]),
-	fieldOfficerController.submitVerification
-);
+			{ name: 'selfieWithHouse', maxCount: 1 },
+			{ name: 'candidateWithRespondent', maxCount: 1 },
+			{ name: 'officerSignature', maxCount: 1 },
+			{ name: 'respondentSignature', maxCount: 1 }
+		]),
+		fieldOfficerController.submitVerification
+	);
 
 module.exports = router;

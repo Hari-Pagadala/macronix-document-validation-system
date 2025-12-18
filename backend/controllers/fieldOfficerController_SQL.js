@@ -364,9 +364,19 @@ exports.submitVerification = async (req, res) => {
             return res.status(400).json({ success: false, message: 'GPS location is required. Please enable location services.' });
         }
 
+        // Validate required photo uploads
+        if (!req.files?.selfieWithHouse || req.files.selfieWithHouse.length === 0) {
+            return res.status(400).json({ success: false, message: 'Selfie Photo with House is required' });
+        }
+        if (!req.files?.candidateWithRespondent || req.files.candidateWithRespondent.length === 0) {
+            return res.status(400).json({ success: false, message: 'Candidate with Respondent Photo is required' });
+        }
+
         // Files uploaded via multer
         const documents = (req.files?.documents || []).map(f => f.filename);
         const photos = (req.files?.photos || []).map(f => f.filename);
+        const selfieWithHouse = req.files?.selfieWithHouse?.[0]?.filename || null;
+        const candidateWithRespondent = req.files?.candidateWithRespondent?.[0]?.filename || null;
         const payload = {
             recordId: record.id,
             fieldOfficerId: foId,
@@ -381,6 +391,8 @@ exports.submitVerification = async (req, res) => {
             gpsLng,
             documents,
             photos,
+            selfieWithHousePath: selfieWithHouse,
+            candidateWithRespondentPath: candidateWithRespondent,
             officerSignaturePath: req.files?.officerSignature?.[0]?.filename || null,
             respondentSignaturePath: req.files?.respondentSignature?.[0]?.filename || null,
             status: action === 'insufficient' ? 'insufficient' : 'submitted'

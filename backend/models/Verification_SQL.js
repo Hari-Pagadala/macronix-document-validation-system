@@ -43,6 +43,8 @@ const Verification = sequelize.define('Verification', {
     type: DataTypes.JSON,
     defaultValue: []
   },
+  selfieWithHousePath: DataTypes.STRING,
+  candidateWithRespondentPath: DataTypes.STRING,
   officerSignaturePath: DataTypes.STRING,
   respondentSignaturePath: DataTypes.STRING
 }, {
