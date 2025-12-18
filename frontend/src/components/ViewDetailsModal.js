@@ -325,6 +325,9 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
               <DetailRow label="Case Number" value={record.caseNumber} />
               <DetailRow label="Reference Number" value={record.referenceNumber} />
               <DetailRow label="Status" value={record.status?.toUpperCase()} />
+              {record.status === 'rejected' && record.remarks && (
+                <DetailRow label="Rejection Reason" value={record.remarks} />
+              )}
             </Paper>
 
             {/* Customer Information Section */}

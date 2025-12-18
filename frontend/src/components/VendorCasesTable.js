@@ -391,6 +391,12 @@ const VendorCasesTable = ({ status = 'all', onUpdate }) => {
                   <Typography variant="caption" color="text.secondary">Status</Typography>
                   <Chip label={statusConfig[selectedRecord.status]?.label} color={statusConfig[selectedRecord.status]?.color} size="small" />
                 </Box>
+                {selectedRecord.status === 'rejected' && selectedRecord.remarks && (
+                  <Box>
+                    <Typography variant="caption" color="text.secondary">Rejection Reason</Typography>
+                    <Typography sx={{ color: '#d32f2f', mt: 0.5 }}>{selectedRecord.remarks}</Typography>
+                  </Box>
+                )}
                 <Box>
                   <Typography variant="caption" color="text.secondary">Created</Typography>
                   <Typography>{formatDate(selectedRecord.createdAt)}</Typography>

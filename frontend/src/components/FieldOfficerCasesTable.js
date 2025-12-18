@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Paper, Table, TableHead, TableRow, TableCell, TableBody, TableContainer, TablePagination, Box, TextField, InputAdornment, Chip, IconButton, CircularProgress, Typography, Button } from '@mui/material';
+import { Paper, Table, TableHead, TableRow, TableCell, TableBody, TableContainer, TablePagination, Box, TextField, InputAdornment, Chip, IconButton, CircularProgress, Typography, Button, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { Search as SearchIcon, MoreVert as MoreVertIcon, Visibility as ViewIcon, AccessTime as AccessTimeIcon, Warning as WarningIcon } from '@mui/icons-material';
 import SubmitVerificationModal from './SubmitVerificationModal';
 import axios from 'axios';
@@ -55,6 +55,7 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
   const [search, setSearch] = useState('');
   const [submitOpen, setSubmitOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => {
     fetchRecords();
@@ -89,6 +90,8 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
   const openSubmit = (record) => { setSelectedRecord(record); setSubmitOpen(true); };
   const closeSubmit = () => { setSubmitOpen(false); setSelectedRecord(null); };
   const handleSubmitted = () => { closeSubmit(); fetchRecords(); };
+  const openDetails = (record) => { setSelectedRecord(record); setDetailsOpen(true); };
+  const closeDetails = () => { setDetailsOpen(false); setSelectedRecord(null); };
 
   const handleSearch = (e) => { setSearch(e.target.value); setPage(0); };
   const handleChangePage = (e, newPage) => setPage(newPage);
@@ -137,12 +140,13 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
                     <TableCell><strong>Completed Date</strong></TableCell>
                   )}
                   {status === 'assigned' && <TableCell><strong>Actions</strong></TableCell>}
+                  {status !== 'assigned' && status !== 'approved' && <TableCell><strong>Actions</strong></TableCell>}
                 </TableRow>
               </TableHead>
               <TableBody>
                 {records.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={status === 'assigned' ? 9 : (status === 'approved' ? 9 : 8)} align="center" sx={{ py: 3 }}>
+                    <TableCell colSpan={status === 'assigned' ? 9 : (status === 'approved' ? 9 : 9)} align="center" sx={{ py: 3 }}>
                       <Typography color="text.secondary">No cases found</Typography>
                     </TableCell>
                   </TableRow>
@@ -189,6 +193,13 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
                             <Button variant="contained" size="small" onClick={() => openSubmit(record)}>Submit Details</Button>
                           </TableCell>
                         )}
+                        {status !== 'assigned' && status !== 'approved' && (
+                          <TableCell>
+                            <IconButton size="small" onClick={() => openDetails(record)} title="View Details">
+                              <ViewIcon fontSize="small" />
+                            </IconButton>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })
@@ -218,6 +229,75 @@ const FieldOfficerCasesTable = ({ status = 'assigned' }) => {
         onSubmitted={handleSubmitted}
       />
     )}
+
+    {/* Case Details Dialog */}
+    <Dialog
+      open={detailsOpen}
+      onClose={closeDetails}
+      maxWidth="md"
+      fullWidth
+    >
+      <DialogTitle>Case Details</DialogTitle>
+      <DialogContent sx={{ pt: 2 }}>
+        {selectedRecord && (
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+            {/* Left Column */}
+            <Box>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Case Information</Typography>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">Case Number</Typography>
+                <Typography>{selectedRecord.caseNumber || 'N/A'}</Typography>
+              </Box>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">Reference Number</Typography>
+                <Typography>{selectedRecord.referenceNumber || 'N/A'}</Typography>
+              </Box>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">Status</Typography>
+                <Chip label={statusConfig[selectedRecord.status]?.label} color={statusConfig[selectedRecord.status]?.color} size="small" />
+              </Box>
+              {selectedRecord.status === 'rejected' && selectedRecord.remarks && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="caption" color="text.secondary">Rejection Reason</Typography>
+                  <Typography sx={{ color: '#d32f2f', mt: 0.5, fontWeight: '500' }}>{selectedRecord.remarks}</Typography>
+                </Box>
+              )}
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">Created</Typography>
+                <Typography>{formatDate(selectedRecord.createdAt)}</Typography>
+              </Box>
+            </Box>
+            {/* Right Column */}
+            <Box>
+              <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold' }}>Customer Information</Typography>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">Customer Name</Typography>
+                <Typography>{selectedRecord.fullName || `${selectedRecord.firstName || ''} ${selectedRecord.lastName || ''}`.trim() || 'N/A'}</Typography>
+              </Box>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">Contact Number</Typography>
+                <Typography>{selectedRecord.contactNumber || 'N/A'}</Typography>
+              </Box>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">Email</Typography>
+                <Typography>{selectedRecord.email || 'N/A'}</Typography>
+              </Box>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">Location</Typography>
+                <Typography>{[selectedRecord.address, selectedRecord.district, selectedRecord.state].filter(Boolean).join(', ') || 'N/A'}</Typography>
+              </Box>
+              <Box sx={{ mb: 2 }}>
+                <Typography variant="caption" color="text.secondary">Pincode</Typography>
+                <Typography>{selectedRecord.pincode || 'N/A'}</Typography>
+              </Box>
+            </Box>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={closeDetails}>Close</Button>
+      </DialogActions>
+    </Dialog>
     </>
   );
 };
