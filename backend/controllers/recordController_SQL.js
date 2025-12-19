@@ -298,11 +298,12 @@ exports.getAllRecords = async (req, res) => {
             where.status = status;
         }
         if (search) {
+            const term = `%${search}%`;
             where[Op.or] = [
-                { referenceNumber: { [Op.like]: `%${search}%` } },
-                { caseNumber: { [Op.like]: `%${search}%` } },
-                { fullName: { [Op.like]: `%${search}%` } },
-                { contactNumber: { [Op.like]: `%${search}%` } }
+                { referenceNumber: { [Op.iLike]: term } },
+                { caseNumber: { [Op.iLike]: term } },
+                { fullName: { [Op.iLike]: term } },
+                { contactNumber: { [Op.iLike]: term } }
             ];
         }
         

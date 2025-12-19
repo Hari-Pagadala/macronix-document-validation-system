@@ -35,6 +35,9 @@ router.get('/cases', foAuth, async (req, res) => {
 	return fieldOfficerController.getCasesForFieldOfficerPublic(req, res);
 });
 
+// Protected: FO profile
+router.get('/profile', foAuth, fieldOfficerController.getMyProfile);
+
 // Submit verification with files
 // Two routes: one for JSON submission (new), one for multipart/FormData (legacy)
 router.post(

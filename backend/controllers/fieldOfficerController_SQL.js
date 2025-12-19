@@ -85,6 +85,50 @@ exports.createFieldOfficer = async (req, res) => {
     }
 };
 
+// Get currently authenticated field officer profile
+exports.getMyProfile = async (req, res) => {
+    try {
+        const foId = req.fieldOfficerId;
+        if (!foId) {
+            return res.status(401).json({ success: false, message: 'Unauthorized' });
+        }
+
+        const fieldOfficer = await FieldOfficer.findByPk(foId, {
+            attributes: { exclude: ['password'] }
+        });
+
+        if (!fieldOfficer) {
+            return res.status(404).json({ success: false, message: 'Field officer not found' });
+        }
+
+        let vendorName = fieldOfficer.vendorName;
+        try {
+            const vendorDoc = await Vendor.findByPk(fieldOfficer.vendor);
+            if (vendorDoc && vendorDoc.company) {
+                vendorName = vendorDoc.company;
+            }
+        } catch (err) {
+            console.error('FO profile vendor lookup failed:', err.message);
+        }
+
+        return res.json({
+            success: true,
+            profile: {
+                id: fieldOfficer.id,
+                name: fieldOfficer.name,
+                email: fieldOfficer.email,
+                phoneNumber: fieldOfficer.phoneNumber,
+                vendorId: fieldOfficer.vendor,
+                vendorName: vendorName || 'Not available',
+                role: 'Field Officer'
+            }
+        });
+    } catch (error) {
+        console.error('FO profile fetch error:', error);
+        return res.status(500).json({ success: false, message: 'Server error fetching profile' });
+    }
+};
+
 // Get all field officers
 exports.getAllFieldOfficers = async (req, res) => {
     try {
@@ -302,11 +346,12 @@ exports.getCasesForFieldOfficerPublic = async (req, res) => {
             where.status = status;
         }
         if (search) {
+            const term = `%${search}%`;
             where[Op.or] = [
-                { referenceNumber: { [Op.like]: `%${search}%` } },
-                { caseNumber: { [Op.like]: `%${search}%` } },
-                { fullName: { [Op.like]: `%${search}%` } },
-                { contactNumber: { [Op.like]: `%${search}%` } }
+                { referenceNumber: { [Op.iLike]: term } },
+                { caseNumber: { [Op.iLike]: term } },
+                { fullName: { [Op.iLike]: term } },
+                { contactNumber: { [Op.iLike]: term } }
             ];
         }
 

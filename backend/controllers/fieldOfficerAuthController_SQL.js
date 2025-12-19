@@ -22,7 +22,29 @@ exports.login = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
+    // Fetch vendor name if available (defensive: vendor may be missing)
+    let vendorName = officer.vendorName;
+    try {
+      const Vendor = require('../models/Vendor_SQL');
+      const vendorDoc = await Vendor.findByPk(officer.vendor);
+      if (vendorDoc && vendorDoc.company) {
+        vendorName = vendorDoc.company;
+      }
+    } catch (vendorErr) {
+      console.error('FO login vendor lookup failed:', vendorErr.message);
+    }
+
     const token = jwt.sign({ id: officer.id, role: 'field_officer' }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+    const profile = {
+      id: officer.id,
+      name: officer.name,
+      email: officer.email,
+      phoneNumber: officer.phoneNumber,
+      vendorId: officer.vendor,
+      vendorName: vendorName || 'Not available',
+      role: 'Field Officer',
+    };
+
     res.json({
       success: true,
       token,
@@ -30,7 +52,8 @@ exports.login = async (req, res) => {
         id: officer.id,
         name: officer.name,
         email: officer.email
-      }
+      },
+      fieldOfficer: profile
     });
   } catch (error) {
     console.error('FO login error:', error);

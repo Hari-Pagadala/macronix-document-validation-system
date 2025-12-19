@@ -19,6 +19,7 @@ const LoginScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [passwordError, setPasswordError] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
   const validateForm = () => {
     let valid = true;
@@ -52,10 +53,8 @@ const LoginScreen = ({ navigation }) => {
 
       if (response.data.success && response.data.token) {
         await AsyncStorage.setItem('fieldOfficerToken', response.data.token);
-        await AsyncStorage.setItem(
-          'fieldOfficerData',
-          JSON.stringify(response.data.fieldOfficer || {})
-        );
+        const profile = response.data.fieldOfficer || response.data.user || {};
+        await AsyncStorage.setItem('fieldOfficerData', JSON.stringify(profile));
         navigation.reset({
           index: 0,
           routes: [{ name: 'CaseListing' }],
@@ -79,8 +78,8 @@ const LoginScreen = ({ navigation }) => {
       style={styles.container}
     >
       <View style={styles.content}>
-        <Text style={styles.title}>Field Officer Portal</Text>
-        <Text style={styles.subtitle}>Mobile Verification App</Text>
+        <Text style={styles.title}>Macronix</Text>
+        <Text style={styles.subtitle}>Field Officer Portal</Text>
 
         <View style={styles.form}>
           <View style={styles.inputGroup}>
@@ -103,18 +102,26 @@ const LoginScreen = ({ navigation }) => {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={[styles.input, passwordError && styles.inputError]}
-              placeholder="Enter your password"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setPasswordError('');
-              }}
-              secureTextEntry
-              editable={!loading}
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={[styles.passwordInput, passwordError && styles.inputError]}
+                placeholder="Enter your password"
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setPasswordError('');
+                }}
+                secureTextEntry={!passwordVisible}
+                editable={!loading}
+              />
+              <TouchableOpacity
+                style={styles.eyeButton}
+                onPress={() => setPasswordVisible(!passwordVisible)}
+              >
+                <Text style={styles.eyeIcon}>{passwordVisible ? '👁️' : '👁️‍🗨️'}</Text>
+              </TouchableOpacity>
+            </View>
             {passwordError && (
               <Text style={styles.errorText}>{passwordError}</Text>
             )}
@@ -138,6 +145,9 @@ const LoginScreen = ({ navigation }) => {
             Macronix Document Validation System
           </Text>
           <Text style={styles.footerSubText}>Field Officer Mobile App</Text>
+          <Text style={styles.footerNote}>
+            Note: If you want to create an account, please contact your vendor.
+          </Text>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -190,6 +200,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     backgroundColor: '#f9f9f9',
   },
+  passwordContainer: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  passwordInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 14,
+    backgroundColor: '#f9f9f9',
+    paddingRight: 45,
+  },
+  eyeButton: {
+    position: 'absolute',
+    right: 12,
+    padding: 4,
+  },
+  eyeIcon: {
+    fontSize: 20,
+  },
   inputError: {
     borderColor: '#ff6b6b',
     backgroundColor: '#fff5f5',
@@ -225,6 +258,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#999',
     marginTop: 4,
+  },
+  footerNote: {
+    fontSize: 11,
+    color: '#666',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });
 

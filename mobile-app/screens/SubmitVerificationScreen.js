@@ -304,6 +304,18 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
   };
 
   const validateForm = () => {
+    if (!form.respondentName.trim()) {
+      Alert.alert('Error', 'Respondent name is required');
+      return false;
+    }
+    if (!form.respondentRelationship.trim()) {
+      Alert.alert('Error', 'Relationship with candidate is required');
+      return false;
+    }
+    if (!form.periodOfStay.trim()) {
+      Alert.alert('Error', 'Period of stay is required');
+      return false;
+    }
     if (!form.verificationDate) {
       Alert.alert('Error', 'Verification date is required');
       return false;
@@ -312,8 +324,16 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
       Alert.alert('Error', 'Ownership type is required');
       return false;
     }
+    if (!form.comments.trim()) {
+      Alert.alert('Error', 'Comments are required');
+      return false;
+    }
     if (!form.respondentContact || form.respondentContact.length !== 10) {
       Alert.alert('Error', 'Respondent contact must be exactly 10 digits');
+      return false;
+    }
+    if (!gps.lat || !gps.lng) {
+      Alert.alert('Error', 'GPS location is required');
       return false;
     }
     if (!selfieWithHouse) {
@@ -322,6 +342,14 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
     }
     if (!candidateWithRespondent) {
       Alert.alert('Error', 'Candidate with Respondent Photo is required');
+      return false;
+    }
+    if (housePhotos.length === 0) {
+      Alert.alert('Error', 'At least one house photo is required');
+      return false;
+    }
+    if (documents.length === 0) {
+      Alert.alert('Error', 'At least one document upload is required');
       return false;
     }
     if (actionType === 'insufficient' && !insufficientReason.trim()) {
@@ -571,7 +599,13 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
         Alert.alert('Success', 'Verification submitted successfully', [
           {
             text: 'OK',
-            onPress: () => navigation.goBack(),
+            onPress: () => {
+              // Return to home and refresh list
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'CaseListing' }],
+              });
+            },
           },
         ]);
       } else {

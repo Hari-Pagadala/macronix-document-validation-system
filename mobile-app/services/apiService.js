@@ -68,6 +68,10 @@ export const authService = {
     api.post('/fo-portal/login', { email, password }),
 };
 
+export const foService = {
+  getProfile: () => api.get('/fo-portal/profile'),
+};
+
 export const caseService = {
   getCases: (status = '', search = '', page = 1, limit = 10) =>
     api.get('/fo-portal/cases', {

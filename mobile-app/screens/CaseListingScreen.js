@@ -27,7 +27,7 @@ const CaseListingScreen = ({ navigation }) => {
   }, []);
 
   useEffect(() => {
-    fetchCases();
+    fetchCases({ background: true });
   }, [search, status]);
 
   const fetchFOName = async () => {
@@ -42,9 +42,9 @@ const CaseListingScreen = ({ navigation }) => {
     }
   };
 
-  const fetchCases = async () => {
+  const fetchCases = async ({ background = false } = {}) => {
     try {
-      setLoading(true);
+      if (!background) setLoading(true);
       const response = await caseService.getCases(status, search, page, 10);
       if (response.data.success) {
         setCases(response.data.records || []);
@@ -69,7 +69,7 @@ const CaseListingScreen = ({ navigation }) => {
 
   const handleRefresh = () => {
     setRefreshing(true);
-    fetchCases();
+    fetchCases({ background: true });
   };
 
   const handleCasePress = (caseId) => {

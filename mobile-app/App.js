@@ -7,6 +7,7 @@ import LoginScreen from './screens/LoginScreen';
 import CaseListingScreen from './screens/CaseListingScreen';
 import CaseDetailsScreen from './screens/CaseDetailsScreen';
 import SubmitVerificationScreen from './screens/SubmitVerificationScreen';
+import ProfileScreen from './screens/ProfileScreen';
 
 const Stack = createStackNavigator();
 
@@ -81,14 +82,14 @@ export default function App() {
           headerRight: () => (
             <TouchableOpacity
               style={{
-                marginRight: 16,
-                paddingHorizontal: 12,
+                marginRight: 12,
+                paddingHorizontal: 10,
                 paddingVertical: 6,
               }}
-              onPress={() => handleLogout(navigation)}
+              onPress={() => navigation.navigate('Profile')}
             >
               <Text style={{ color: '#fff', fontSize: 14, fontWeight: '600' }}>
-                Logout
+                Profile
               </Text>
             </TouchableOpacity>
           ),
@@ -121,6 +122,13 @@ export default function App() {
           component={SubmitVerificationScreen}
           options={{
             title: 'Submit Verification',
+          }}
+        />
+        <Stack.Screen
+          name="Profile"
+          component={ProfileScreen}
+          options={{
+            title: 'Profile',
           }}
         />
       </Stack.Navigator>
