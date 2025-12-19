@@ -8,10 +8,20 @@ dotenv.config();
 
 const app = express();
 
+// Request logging middleware
+app.use((req, res, next) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] ${req.method} ${req.url} from ${req.ip}`);
+    if (req.method === 'POST' || req.method === 'PUT') {
+        console.log('Headers:', req.headers);
+    }
+    next();
+});
+
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Initialize database models
@@ -53,12 +63,32 @@ app.use('/api/vendor-portal', vendorPortalRoutes);
 app.use('/api/fo-portal', foPortalRoutes);
 app.use('/api/reports', reportRoutes);
 
-// Health check
+// Health check endpoints
 app.get('/', (req, res) => {
     res.json({ 
         message: 'Document Validation API is running!',
         status: 'active',
         database: 'PostgreSQL',
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.get('/api/health', (req, res) => {
+    res.json({
+        ok: true,
+        host: req.hostname,
+        ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+        time: new Date().toISOString()
+    });
+});
+
+// Test POST endpoint (no files)
+app.post('/api/test-post', (req, res) => {
+    console.log('[Test POST] Received test POST request');
+    console.log('[Test POST] Body:', req.body);
+    res.json({
+        ok: true,
+        message: 'Test POST successful',
         timestamp: new Date().toISOString()
     });
 });
@@ -79,6 +109,6 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server running on http://0.0.0.0:${PORT} (accessible at http://192.168.29.228:${PORT})`);
 });

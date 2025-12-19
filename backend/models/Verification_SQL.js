@@ -23,6 +23,7 @@ const Verification = sequelize.define('Verification', {
   ownershipType: DataTypes.STRING,
   verificationDate: DataTypes.DATEONLY,
   comments: DataTypes.TEXT,
+  insufficientReason: DataTypes.TEXT,
   status: {
     type: DataTypes.ENUM('submitted', 'insufficient'),
     defaultValue: 'submitted'

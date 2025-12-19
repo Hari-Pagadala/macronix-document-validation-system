@@ -14,6 +14,7 @@ import FieldOfficerDashboard from './pages/FieldOfficerDashboard';
 
 // Context
 import { AuthProvider } from './context/AuthContext';
+import ImageKitProvider from './context/ImageKitContext';
 import PrivateRoute from './components/PrivateRoute';
 
 const theme = createTheme({
@@ -37,17 +38,18 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <AuthProvider>
-        <Router>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/vendor/login" element={<VendorLogin />} />
-            <Route path="/field-officer/login" element={<FieldOfficerLogin />} />
-            <Route 
-              path="/dashboard/*" 
-              element={
-                <PrivateRoute>
-                  <Dashboard />
+      <ImageKitProvider>
+        <AuthProvider>
+          <Router>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/vendor/login" element={<VendorLogin />} />
+              <Route path="/field-officer/login" element={<FieldOfficerLogin />} />
+              <Route 
+                path="/dashboard/*" 
+                element={
+                  <PrivateRoute>
+                    <Dashboard />
                 </PrivateRoute>
               } 
             />
@@ -71,7 +73,8 @@ function App() {
             <Route path="/" element={<Navigate to="/dashboard" />} />
           </Routes>
         </Router>
-      </AuthProvider>
+        </AuthProvider>
+      </ImageKitProvider>
     </ThemeProvider>
   );
 }

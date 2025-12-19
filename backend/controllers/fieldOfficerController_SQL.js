@@ -4,6 +4,8 @@ const Record = require('../models/Record_SQL');
 const Verification = require('../models/Verification_SQL');
 const { validatePassword } = require('../utils/passwordValidation');
 const { Op } = require('sequelize');
+const path = require('path');
+const fs = require('fs');
 
 // Create field officer
 exports.createFieldOfficer = async (req, res) => {
@@ -353,30 +355,142 @@ exports.submitVerification = async (req, res) => {
             ownershipType,
             verificationDate,
             comments,
-            gpsLat,
-            gpsLng,
-            officerSignature,
-            respondentSignature,
-            action
+            action,
+            submissionGpsLat,
+            submissionGpsLng,
+            submissionTimestamp,
+            // ImageKit URLs (new submission format)
+            documents = [],
+            photos = [],
+            selfieWithHouse = null,
+            candidateWithRespondent = null,
+            officerSignature = null,
+            respondentSignature = null,
+            files = {} // Base64 encoded files from JSON submission (legacy)
         } = req.body;
 
-        if (!gpsLat || !gpsLng) {
-            return res.status(400).json({ success: false, message: 'GPS location is required. Please enable location services.' });
+        console.log('[Submit] Received submission with ImageKit URLs or files:', {
+          hasDocuments: Array.isArray(documents) && documents.length > 0,
+          hasPhotos: Array.isArray(photos) && photos.length > 0,
+          hasSelfie: !!selfieWithHouse,
+          hasCandidate: !!candidateWithRespondent,
+          hasOfficerSig: !!officerSignature,
+          hasRespondentSig: !!respondentSignature,
+          hasFiles: Object.keys(files).length > 0
+        });
+
+        // Prefer submission GPS; fallback to selfie photo GPS; else error
+        const resolvedGpsLat = submissionGpsLat;
+        const resolvedGpsLng = submissionGpsLng;
+        if (!resolvedGpsLat || !resolvedGpsLng) {
+            return res.status(400).json({ success: false, message: 'GPS location is required at submission time.' });
         }
 
-        // Validate required photo uploads
-        if (!req.files?.selfieWithHouse || req.files.selfieWithHouse.length === 0) {
-            return res.status(400).json({ success: false, message: 'Selfie Photo with House is required' });
-        }
-        if (!req.files?.candidateWithRespondent || req.files.candidateWithRespondent.length === 0) {
-            return res.status(400).json({ success: false, message: 'Candidate with Respondent Photo is required' });
+        // Check if using ImageKit URLs (new format) or base64/multer files (legacy)
+        const isImageKitSubmission = !!selfieWithHouse || !!candidateWithRespondent || !!officerSignature || !!respondentSignature;
+        const hasOfficerSignature = isImageKitSubmission ? !!officerSignature : (req.files?.officerSignature?.length > 0 || files.officerSignature);
+        const hasRespondentSignature = isImageKitSubmission ? !!respondentSignature : (req.files?.respondentSignature?.length > 0 || files.respondentSignature);
+        
+
+        // Validate signatures (mandatory)
+        if (!hasOfficerSignature || !hasRespondentSignature) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Both officer and respondent signatures are required' 
+            });
         }
 
-        // Files uploaded via multer
-        const documents = (req.files?.documents || []).map(f => f.filename);
-        const photos = (req.files?.photos || []).map(f => f.filename);
-        const selfieWithHouse = req.files?.selfieWithHouse?.[0]?.filename || null;
-        const candidateWithRespondent = req.files?.candidateWithRespondent?.[0]?.filename || null;
+        // Process base64 files if present
+        const uploadDir = path.join(__dirname, '..', 'uploads', 'fo');
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        const saveBase64File = (base64Data, filename) => {
+            const filepath = path.join(uploadDir, filename);
+            const buffer = Buffer.from(base64Data, 'base64');
+            fs.writeFileSync(filepath, buffer);
+            return filename;
+        };
+
+        let officerSignaturePath = null;
+        let respondentSignaturePath = null;
+        let docUrls = [];
+        let photoUrls = [];
+        let selfieUrl = null;
+        let candidateUrl = null;
+
+        // If ImageKit submission (new format), URLs are already provided
+        if (isImageKitSubmission) {
+          console.log('[Submit] Processing ImageKit URLs...');
+          docUrls = Array.isArray(documents) ? documents.filter(d => typeof d === 'string') : [];
+          photoUrls = Array.isArray(photos) ? photos.filter(p => typeof p === 'string') : [];
+          selfieUrl = typeof selfieWithHouse === 'string' ? selfieWithHouse : null;
+          candidateUrl = typeof candidateWithRespondent === 'string' ? candidateWithRespondent : null;
+          officerSignaturePath = typeof officerSignature === 'string' ? officerSignature : null;
+          respondentSignaturePath = typeof respondentSignature === 'string' ? respondentSignature : null;
+          console.log('[Submit] ImageKit URLs collected:', { docUrls, photoUrls, selfieUrl, candidateUrl });
+        } else {
+          // Legacy path: base64 or multer files
+          console.log('[Submit] Processing legacy files (base64 or multer)...');
+          const multerFiles = req.files || {};
+          
+          // Save base64 files if present
+          if (files.officerSignature) {
+            const filename = `officer_sig_${Date.now()}.png`;
+            officerSignaturePath = saveBase64File(files.officerSignature.data, filename);
+            console.log('[Submit] Saved officer signature:', officerSignaturePath);
+          } else if (multerFiles.officerSignature?.[0]) {
+            officerSignaturePath = multerFiles.officerSignature[0].filename;
+          }
+
+          if (files.respondentSignature) {
+            const filename = `respondent_sig_${Date.now()}.png`;
+            respondentSignaturePath = saveBase64File(files.respondentSignature.data, filename);
+            console.log('[Submit] Saved respondent signature:', respondentSignaturePath);
+          } else if (multerFiles.respondentSignature?.[0]) {
+            respondentSignaturePath = multerFiles.respondentSignature[0].filename;
+          }
+
+          // Documents
+          docUrls = (multerFiles?.documents || []).map(f => f.filename);
+          if (Array.isArray(files.documents)) {
+            const savedDocs = files.documents.map((doc, idx) => {
+              const ext = doc.type?.includes('png') ? 'png' : 'jpg';
+              const filename = `document_${Date.now()}_${idx}.${ext}`;
+              return saveBase64File(doc.data, filename);
+            });
+            docUrls = docUrls.concat(savedDocs);
+          }
+
+          // Photos
+          photoUrls = (multerFiles?.photos || []).map(f => f.filename);
+          if (Array.isArray(files.photos)) {
+            const savedPhotos = files.photos.map((ph, idx) => {
+              const ext = ph.type?.includes('png') ? 'png' : 'jpg';
+              const filename = `photo_${Date.now()}_${idx}.${ext}`;
+              return saveBase64File(ph.data, filename);
+            });
+            photoUrls = photoUrls.concat(savedPhotos);
+          }
+
+          // Selfie with house
+          selfieUrl = multerFiles?.selfieWithHouse?.[0]?.filename || null;
+          if (files.selfieWithHouse) {
+            const ext = files.selfieWithHouse.type?.includes('png') ? 'png' : 'jpg';
+            const filename = `selfie_${Date.now()}.${ext}`;
+            selfieUrl = saveBase64File(files.selfieWithHouse.data, filename);
+          }
+
+          // Candidate with respondent
+          candidateUrl = multerFiles?.candidateWithRespondent?.[0]?.filename || null;
+          if (files.candidateWithRespondent) {
+            const ext = files.candidateWithRespondent.type?.includes('png') ? 'png' : 'jpg';
+            const filename = `candidate_${Date.now()}.${ext}`;
+            candidateUrl = saveBase64File(files.candidateWithRespondent.data, filename);
+          }
+        }
+
         const payload = {
             recordId: record.id,
             fieldOfficerId: foId,
@@ -387,14 +501,15 @@ exports.submitVerification = async (req, res) => {
             ownershipType,
             verificationDate: verificationDate ? new Date(verificationDate) : null,
             comments,
-            gpsLat,
-            gpsLng,
-            documents,
-            photos,
-            selfieWithHousePath: selfieWithHouse,
-            candidateWithRespondentPath: candidateWithRespondent,
-            officerSignaturePath: req.files?.officerSignature?.[0]?.filename || null,
-            respondentSignaturePath: req.files?.respondentSignature?.[0]?.filename || null,
+            insufficientReason: action === 'insufficient' ? (req.body.insufficientReason || null) : null,
+            gpsLat: resolvedGpsLat,
+            gpsLng: resolvedGpsLng,
+            documents: docUrls,
+            photos: photoUrls,
+            selfieWithHousePath: selfieUrl,
+            candidateWithRespondentPath: candidateUrl,
+            officerSignaturePath: officerSignaturePath,
+            respondentSignaturePath: respondentSignaturePath,
             status: action === 'insufficient' ? 'insufficient' : 'submitted'
         };
 
@@ -416,6 +531,7 @@ exports.submitVerification = async (req, res) => {
         res.json({ success: true, message: 'Verification submitted', record: record.toJSON() });
     } catch (error) {
         console.error('Error submitting verification:', error);
-        res.status(500).json({ success: false, message: 'Server error submitting verification' });
+        console.error('Error stack:', error.stack);
+        res.status(500).json({ success: false, message: 'Server error submitting verification', error: error.message });
     }
 };

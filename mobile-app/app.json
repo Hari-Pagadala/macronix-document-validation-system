@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "FO Mobile App",
+    "slug": "fo-mobile-app",
+    "version": "1.0.0",
+    "sdkVersion": "54.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTabletMode": true
+    },
+    "android": {
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    }
+    ,
+    "extra": {
+      "EXPO_PUBLIC_API_BASE_URL": "http://192.168.1.16:5000/api",
+      "EXPO_PUBLIC_IMAGEKIT_ENDPOINT": "https://ik.imagekit.io/g6rdi7spf",
+      "EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY": "public_jnmn+DPEtMjBKnAKHgFbNRN4OxA="
+    }
+  }
+}

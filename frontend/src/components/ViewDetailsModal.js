@@ -18,7 +18,14 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 import axios from 'axios';
+// ImageKit images displayed as regular img tags with URL transformations
 import { useAuth } from '../context/AuthContext';
+import { UPLOADS_BASE_URL } from '../config';
+
+// Helper to detect if URL is ImageKit URL or local file path
+const isImageKitUrl = (url) => {
+  return typeof url === 'string' && url.includes('ik.imagekit.io');
+};
 
 const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
   const { token } = useAuth();
@@ -423,12 +430,15 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                     <Typography variant="body2" color="text.secondary">None</Typography>
                   ) : (
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
-                      {(verification.documents || []).map((file) => (
-                        <Box key={file} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
-                          <Box component="img" src={`http://localhost:5000/uploads/fo/${file}`} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(`http://localhost:5000/uploads/fo/${file}`, '_blank')} />
-                          <Typography variant="caption" sx={{ display: 'block', p: 0.5, textAlign: 'center', wordBreak: 'break-word', fontSize: '0.75rem' }}>{file}</Typography>
-                        </Box>
-                      ))}
+                      {(verification.documents || []).map((file) => {
+                        const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
+                        return (
+                          <Box key={file} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
+                            <Box component="img" src={displayUrl} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(displayUrl, '_blank')} />
+                            <Typography variant="caption" sx={{ display: 'block', p: 0.5, textAlign: 'center', wordBreak: 'break-word', fontSize: '0.75rem' }}>{file}</Typography>
+                          </Box>
+                        );
+                      })}
                     </Box>
                   )}
                 </Box>
@@ -440,12 +450,15 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                     <Typography variant="body2" color="text.secondary">None</Typography>
                   ) : (
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
-                      {(verification.photos || []).map((file) => (
-                        <Box key={file} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
-                          <Box component="img" src={`http://localhost:5000/uploads/fo/${file}`} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(`http://localhost:5000/uploads/fo/${file}`, '_blank')} />
-                          <Typography variant="caption" sx={{ display: 'block', p: 0.5, textAlign: 'center', wordBreak: 'break-word', fontSize: '0.75rem' }}>{file}</Typography>
-                        </Box>
-                      ))}
+                      {(verification.photos || []).map((file) => {
+                        const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
+                        return (
+                          <Box key={file} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
+                            <Box component="img" src={displayUrl} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(displayUrl, '_blank')} />
+                            <Typography variant="caption" sx={{ display: 'block', p: 0.5, textAlign: 'center', wordBreak: 'break-word', fontSize: '0.75rem' }}>{file}</Typography>
+                          </Box>
+                        );
+                      })}
                     </Box>
                   )}
                 </Box>
@@ -454,7 +467,12 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                     Selfie Photo with House
                   </Typography>
                   {verification.selfieWithHousePath ? (
-                    <Box component="img" src={`http://localhost:5000/uploads/fo/${verification.selfieWithHousePath}`} alt="Selfie with House" sx={{ maxWidth: '100%', maxHeight: '300px', border: '1px solid #eee', mt: 1, cursor: 'pointer' }} />
+                    (() => {
+                      const displayUrl = isImageKitUrl(verification.selfieWithHousePath) ? verification.selfieWithHousePath : `${UPLOADS_BASE_URL}/${verification.selfieWithHousePath}`;
+                      return (
+                        <Box component="img" src={displayUrl} alt="Selfie with House" sx={{ maxWidth: '100%', maxHeight: '300px', border: '1px solid #eee', mt: 1, cursor: 'pointer' }} onClick={() => window.open(displayUrl, '_blank')} />
+                      );
+                    })()
                   ) : (
                     <Typography variant="body2" color="text.secondary">Not provided</Typography>
                   )}
@@ -464,7 +482,12 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                     Candidate with Respondent Photo
                   </Typography>
                   {verification.candidateWithRespondentPath ? (
-                    <Box component="img" src={`http://localhost:5000/uploads/fo/${verification.candidateWithRespondentPath}`} alt="Candidate with Respondent" sx={{ maxWidth: '100%', maxHeight: '300px', border: '1px solid #eee', mt: 1, cursor: 'pointer' }} />
+                    (() => {
+                      const displayUrl = isImageKitUrl(verification.candidateWithRespondentPath) ? verification.candidateWithRespondentPath : `${UPLOADS_BASE_URL}/${verification.candidateWithRespondentPath}`;
+                      return (
+                        <Box component="img" src={displayUrl} alt="Candidate with Respondent" sx={{ maxWidth: '100%', maxHeight: '300px', border: '1px solid #eee', mt: 1, cursor: 'pointer' }} onClick={() => window.open(displayUrl, '_blank')} />
+                      );
+                    })()
                   ) : (
                     <Typography variant="body2" color="text.secondary">Not provided</Typography>
                   )}
@@ -477,7 +500,12 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                     <Grid item xs={6}>
                       <Typography variant="caption" color="text.secondary">Field Officer</Typography>
                       {verification.officerSignaturePath ? (
-                        <Box component="img" src={`http://localhost:5000/uploads/fo/${verification.officerSignaturePath}`} alt="Officer Signature" sx={{ maxWidth: '100%', border: '1px solid #eee', mt: 1 }} />
+                        (() => {
+                          const displayUrl = isImageKitUrl(verification.officerSignaturePath) ? verification.officerSignaturePath : `${UPLOADS_BASE_URL}/${verification.officerSignaturePath}`;
+                          return (
+                            <Box component="img" src={displayUrl} alt="Officer Signature" sx={{ maxWidth: '100%', border: '1px solid #eee', mt: 1 }} />
+                          );
+                        })()
                       ) : (
                         <Typography variant="body2" color="text.secondary">None</Typography>
                       )}
@@ -485,7 +513,12 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                     <Grid item xs={6}>
                       <Typography variant="caption" color="text.secondary">Respondent</Typography>
                       {verification.respondentSignaturePath ? (
-                        <Box component="img" src={`http://localhost:5000/uploads/fo/${verification.respondentSignaturePath}`} alt="Respondent Signature" sx={{ maxWidth: '100%', border: '1px solid #eee', mt: 1 }} />
+                        (() => {
+                          const displayUrl = isImageKitUrl(verification.respondentSignaturePath) ? verification.respondentSignaturePath : `${UPLOADS_BASE_URL}/${verification.respondentSignaturePath}`;
+                          return (
+                            <Box component="img" src={displayUrl} alt="Respondent Signature" sx={{ maxWidth: '100%', border: '1px solid #eee', mt: 1 }} />
+                          );
+                        })()
                       ) : (
                         <Typography variant="body2" color="text.secondary">None</Typography>
                       )}

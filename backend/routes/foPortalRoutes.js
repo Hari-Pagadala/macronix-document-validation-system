@@ -3,6 +3,7 @@ const router = express.Router();
 const fieldOfficerController = require('../controllers/fieldOfficerController_SQL');
 const fieldOfficerAuthController = require('../controllers/fieldOfficerAuthController_SQL');
 const foAuth = require('../middleware/fieldOfficerAuth');
+const { generateImageKitToken } = require('../utils/imagekitHelper');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -24,6 +25,9 @@ const upload = multer({ storage });
 // Auth
 router.post('/login', fieldOfficerAuthController.login);
 
+// ImageKit token endpoint (no auth required, token is secure)
+router.post('/imagekit-token', generateImageKitToken);
+
 // Protected: FO can fetch only their cases
 router.get('/cases', foAuth, async (req, res) => {
 	// Reuse controller logic but force foId from token
@@ -32,18 +36,27 @@ router.get('/cases', foAuth, async (req, res) => {
 });
 
 // Submit verification with files
+// Two routes: one for JSON submission (new), one for multipart/FormData (legacy)
 router.post(
 	'/cases/:caseId/submit',
 	foAuth,
+	(req, res, next) => {
+		// If content-type is JSON, skip multer and go directly to controller
+		if (req.is('application/json')) {
+			return fieldOfficerController.submitVerification(req, res);
+		}
+		// Otherwise, use multer for multipart/form-data
+		next();
+	},
 	upload.fields([
 		{ name: 'documents', maxCount: 10 },
 		{ name: 'photos', maxCount: 10 },
-			{ name: 'selfieWithHouse', maxCount: 1 },
-			{ name: 'candidateWithRespondent', maxCount: 1 },
-			{ name: 'officerSignature', maxCount: 1 },
-			{ name: 'respondentSignature', maxCount: 1 }
-		]),
-		fieldOfficerController.submitVerification
-	);
+		{ name: 'selfieWithHouse', maxCount: 1 },
+		{ name: 'candidateWithRespondent', maxCount: 1 },
+		{ name: 'officerSignature', maxCount: 1 },
+		{ name: 'respondentSignature', maxCount: 1 }
+	]),
+	fieldOfficerController.submitVerification
+);
 
 module.exports = router;
