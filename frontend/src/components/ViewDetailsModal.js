@@ -12,10 +12,14 @@ import {
   CircularProgress,
   Alert,
   Divider,
-  TextField
+  TextField,
+  IconButton
 } from '@mui/material';
 import {
-  Close as CloseIcon
+  Close as CloseIcon,
+  ZoomIn as ZoomInIcon,
+  ZoomOut as ZoomOutIcon,
+  RestartAlt as ResetIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 // ImageKit images displayed as regular img tags with URL transformations
@@ -47,6 +51,15 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
   const [showReinitiateConfirm, setShowReinitiateConfirm] = useState(false);
   const [showSendBackConfirm, setShowSendBackConfirm] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  // Image preview (lightbox)
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewSrc, setPreviewSrc] = useState('');
+  const [previewTitle, setPreviewTitle] = useState('');
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [panning, setPanning] = useState(false);
+  const panStartRef = React.useRef({ x: 0, y: 0 });
+  const offsetStartRef = React.useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     if (open && recordId) {
@@ -84,6 +97,46 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
       setVerification(null);
     }
   };
+
+  const openPreview = (src, title = 'Preview') => {
+    setPreviewSrc(src);
+    setPreviewTitle(title);
+    setPreviewOpen(true);
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+  };
+
+  const closePreview = () => {
+    setPreviewOpen(false);
+    setPreviewSrc('');
+    setPreviewTitle('');
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+  };
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.1 : -0.1;
+    setZoom((z) => Math.min(4, Math.max(1, +(z + delta).toFixed(2))));
+  };
+
+  const startPan = (clientX, clientY) => {
+    if (zoom === 1) return;
+    setPanning(true);
+    panStartRef.current = { x: clientX, y: clientY };
+    offsetStartRef.current = { ...offset };
+  };
+  const movePan = (clientX, clientY) => {
+    if (!panning) return;
+    const dx = clientX - panStartRef.current.x;
+    const dy = clientY - panStartRef.current.y;
+    setOffset({ x: offsetStartRef.current.x + dx, y: offsetStartRef.current.y + dy });
+  };
+  const endPan = () => setPanning(false);
+  const resetZoom = () => { setZoom(1); setOffset({ x: 0, y: 0 }); };
+  const zoomIn = () => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)));
+  const zoomOut = () => setZoom((z) => Math.max(1, +(z - 0.25).toFixed(2)));
+  const toggleZoom = () => { setZoom((z) => (z === 1 ? 2 : 1)); setOffset({ x: 0, y: 0 }); };
 
   const handleStopCase = async () => {
     try {
@@ -280,6 +333,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
   );
 
   return (
+    <>
     <Dialog 
       open={open} 
       onClose={onClose} 
@@ -434,8 +488,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                         const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
                         return (
                           <Box key={file} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
-                            <Box component="img" src={displayUrl} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(displayUrl, '_blank')} />
-                            <Typography variant="caption" sx={{ display: 'block', p: 0.5, textAlign: 'center', wordBreak: 'break-word', fontSize: '0.75rem' }}>{file}</Typography>
+                            <Box component="img" src={displayUrl} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openPreview(displayUrl, 'Document') } />
                           </Box>
                         );
                       })}
@@ -454,8 +507,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                         const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
                         return (
                           <Box key={file} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
-                            <Box component="img" src={displayUrl} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(displayUrl, '_blank')} />
-                            <Typography variant="caption" sx={{ display: 'block', p: 0.5, textAlign: 'center', wordBreak: 'break-word', fontSize: '0.75rem' }}>{file}</Typography>
+                            <Box component="img" src={displayUrl} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openPreview(displayUrl, 'Photo')} />
                           </Box>
                         );
                       })}
@@ -470,7 +522,9 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                     (() => {
                       const displayUrl = isImageKitUrl(verification.selfieWithHousePath) ? verification.selfieWithHousePath : `${UPLOADS_BASE_URL}/${verification.selfieWithHousePath}`;
                       return (
-                        <Box component="img" src={displayUrl} alt="Selfie with House" sx={{ maxWidth: '100%', maxHeight: '300px', border: '1px solid #eee', mt: 1, cursor: 'pointer' }} onClick={() => window.open(displayUrl, '_blank')} />
+                        <Box sx={{ width: '100%', maxWidth: 300 }}>
+                          <Box component="img" src={displayUrl} alt="Selfie with House" sx={{ width: '100%', height: 180, objectFit: 'cover', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'Selfie with House')} />
+                        </Box>
                       );
                     })()
                   ) : (
@@ -485,7 +539,9 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                     (() => {
                       const displayUrl = isImageKitUrl(verification.candidateWithRespondentPath) ? verification.candidateWithRespondentPath : `${UPLOADS_BASE_URL}/${verification.candidateWithRespondentPath}`;
                       return (
-                        <Box component="img" src={displayUrl} alt="Candidate with Respondent" sx={{ maxWidth: '100%', maxHeight: '300px', border: '1px solid #eee', mt: 1, cursor: 'pointer' }} onClick={() => window.open(displayUrl, '_blank')} />
+                        <Box sx={{ width: '100%', maxWidth: 300 }}>
+                          <Box component="img" src={displayUrl} alt="Candidate with Respondent" sx={{ width: '100%', height: 180, objectFit: 'cover', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'Candidate with Respondent')} />
+                        </Box>
                       );
                     })()
                   ) : (
@@ -503,7 +559,9 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                         (() => {
                           const displayUrl = isImageKitUrl(verification.officerSignaturePath) ? verification.officerSignaturePath : `${UPLOADS_BASE_URL}/${verification.officerSignaturePath}`;
                           return (
-                            <Box component="img" src={displayUrl} alt="Officer Signature" sx={{ maxWidth: '100%', border: '1px solid #eee', mt: 1 }} />
+                            <Box sx={{ width: '100%', maxWidth: 300 }}>
+                              <Box component="img" src={displayUrl} alt="Officer Signature" sx={{ width: '100%', height: 160, objectFit: 'contain', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1, backgroundColor: '#fafafa' }} onClick={() => openPreview(displayUrl, 'Officer Signature')} />
+                            </Box>
                           );
                         })()
                       ) : (
@@ -516,7 +574,9 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                         (() => {
                           const displayUrl = isImageKitUrl(verification.respondentSignaturePath) ? verification.respondentSignaturePath : `${UPLOADS_BASE_URL}/${verification.respondentSignaturePath}`;
                           return (
-                            <Box component="img" src={displayUrl} alt="Respondent Signature" sx={{ maxWidth: '100%', border: '1px solid #eee', mt: 1 }} />
+                            <Box sx={{ width: '100%', maxWidth: 300 }}>
+                              <Box component="img" src={displayUrl} alt="Respondent Signature" sx={{ width: '100%', height: 160, objectFit: 'contain', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1, backgroundColor: '#fafafa' }} onClick={() => openPreview(displayUrl, 'Respondent Signature')} />
+                            </Box>
                           );
                         })()
                       ) : (
@@ -908,6 +968,84 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
         </DialogActions>
       </Dialog>
     </Dialog>
+
+    {/* Image Lightbox */}
+    <Dialog open={previewOpen} onClose={closePreview} maxWidth="md" fullWidth>
+      <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Typography variant="subtitle1">{previewTitle}</Typography>
+        <Button onClick={closePreview}>
+          <CloseIcon />
+        </Button>
+      </DialogTitle>
+      <DialogContent sx={{ position: 'relative', p: 0, backgroundColor: '#000' }}>
+        {/* Controls */}
+        <Box sx={{ position: 'absolute', top: 8, right: 8, zIndex: 2, display: 'flex', gap: 1 }}>
+          <IconButton size="small" onClick={zoomOut} sx={{ bgcolor: 'rgba(255,255,255,0.85)' }} title="Zoom out">
+            <ZoomOutIcon />
+          </IconButton>
+          <IconButton size="small" onClick={resetZoom} sx={{ bgcolor: 'rgba(255,255,255,0.85)' }} title="Reset">
+            <ResetIcon />
+          </IconButton>
+          <IconButton size="small" onClick={zoomIn} sx={{ bgcolor: 'rgba(255,255,255,0.85)' }} title="Zoom in">
+            <ZoomInIcon />
+          </IconButton>
+        </Box>
+
+        {/* Zoom/Pan stage */}
+        <Box
+          sx={{
+            width: '100%',
+            height: '80vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            touchAction: 'none',
+            cursor: panning && zoom > 1 ? 'grabbing' : zoom > 1 ? 'grab' : 'default'
+          }}
+          onWheel={handleWheel}
+          onDoubleClick={toggleZoom}
+          onMouseDown={(e) => startPan(e.clientX, e.clientY)}
+          onMouseMove={(e) => movePan(e.clientX, e.clientY)}
+          onMouseUp={endPan}
+          onMouseLeave={endPan}
+          onTouchStart={(e) => {
+            if (e.touches.length === 1) {
+              const t = e.touches[0];
+              startPan(t.clientX, t.clientY);
+            }
+          }}
+          onTouchMove={(e) => {
+            if (e.touches.length === 1) {
+              const t = e.touches[0];
+              movePan(t.clientX, t.clientY);
+            }
+          }}
+          onTouchEnd={endPan}
+        >
+          {previewSrc ? (
+            <Box
+              component="img"
+              src={previewSrc}
+              alt={previewTitle}
+              sx={{
+                maxWidth: zoom === 1 ? '100%' : 'none',
+                maxHeight: zoom === 1 ? '100%' : 'none',
+                transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
+                transition: panning ? 'none' : 'transform 0.08s ease-out',
+                willChange: 'transform'
+              }}
+              draggable={false}
+            />
+          ) : (
+            <Box sx={{ p: 4 }}>
+              <Typography color="text.secondary">No image</Typography>
+            </Box>
+          )}
+        </Box>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 };
 

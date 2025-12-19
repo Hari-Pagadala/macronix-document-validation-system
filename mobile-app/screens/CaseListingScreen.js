@@ -76,29 +76,51 @@ const CaseListingScreen = ({ navigation }) => {
     navigation.navigate('CaseDetails', { caseId });
   };
 
-  const renderCaseItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.caseCard}
-      onPress={() => handleCasePress(item.id)}
-    >
-      <View style={styles.cardContent}>
-        <Text style={styles.caseNumber}>{item.caseNumber}</Text>
-        <Text style={styles.refNumber}>{item.referenceNumber}</Text>
-        <Text style={styles.name}>{item.fullName}</Text>
-        <Text style={styles.contact}>{item.contactNumber}</Text>
-        <View style={styles.statusRow}>
-          <View
-            style={[
-              styles.statusBadge,
-              { backgroundColor: getStatusColor(item.status) },
-            ]}
-          >
-            <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+  const renderCaseItem = ({ item }) => {
+    // Calculate TAT days for assigned cases
+    let tatDays = null;
+    if (item.status === 'assigned' && item.tatDueDate) {
+      const dueDate = new Date(item.tatDueDate);
+      const today = new Date();
+      const diffTime = dueDate - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      tatDays = diffDays;
+    }
+
+    return (
+      <TouchableOpacity
+        style={styles.caseCard}
+        onPress={() => handleCasePress(item.id)}
+      >
+        <View style={styles.cardContent}>
+          <Text style={styles.caseNumber}>{item.caseNumber}</Text>
+          <Text style={styles.refNumber}>{item.referenceNumber}</Text>
+          <Text style={styles.name}>{item.fullName}</Text>
+          <Text style={styles.contact}>{item.contactNumber}</Text>
+          <View style={styles.statusRow}>
+            <View
+              style={[
+                styles.statusBadge,
+                { backgroundColor: getStatusColor(item.status) },
+              ]}
+            >
+              <Text style={styles.statusText}>{item.status.toUpperCase()}</Text>
+            </View>
+            {tatDays !== null && (
+              <View style={[
+                styles.tatBadge,
+                { backgroundColor: tatDays < 0 ? '#f44336' : tatDays <= 2 ? '#ff9800' : '#4caf50' }
+              ]}>
+                <Text style={styles.tatText}>
+                  {tatDays < 0 ? `Overdue ${Math.abs(tatDays)}d` : `${tatDays}d left`}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -137,7 +159,7 @@ const CaseListingScreen = ({ navigation }) => {
       </View>
 
       <View style={styles.filterRow}>
-        {['assigned', 'submitted', 'insufficient', 'approved'].map((s) => (
+        {['assigned', 'submitted', 'insufficient', 'approved', 'rejected'].map((s) => (
           <TouchableOpacity
             key={s}
             style={[
@@ -296,6 +318,8 @@ const styles = StyleSheet.create({
   statusRow: {
     flexDirection: 'row',
     marginTop: 8,
+    alignItems: 'center',
+    gap: 8,
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -305,6 +329,16 @@ const styles = StyleSheet.create({
   statusText: {
     color: '#fff',
     fontSize: 11,
+    fontWeight: '600',
+  },
+  tatBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  tatText: {
+    color: '#fff',
+    fontSize: 10,
     fontWeight: '600',
   },
   emptyContainer: {

@@ -86,6 +86,12 @@ const CaseDetailsScreen = ({ route, navigation }) => {
           <DetailRow label="Case Number" value={record.caseNumber} />
           <DetailRow label="Reference Number" value={record.referenceNumber} />
           <DetailRow label="Status" value={record.status?.toUpperCase()} />
+          {record.status === 'rejected' && record.remarks && (
+            <View style={styles.remarksContainer}>
+              <Text style={styles.remarksLabel}>Rejection Reason:</Text>
+              <Text style={styles.remarksText}>{record.remarks}</Text>
+            </View>
+          )}
         </View>
 
         {/* Customer Info */}
@@ -227,6 +233,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1565c0',
     fontWeight: '500',
+  },
+  remarksContainer: {
+    backgroundColor: '#ffebee',
+    padding: 12,
+    borderRadius: 6,
+    marginTop: 12,
+    borderLeftWidth: 4,
+    borderLeftColor: '#f44336',
+  },
+  remarksLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#d32f2f',
+    marginBottom: 6,
+  },
+  remarksText: {
+    fontSize: 14,
+    color: '#c62828',
+    lineHeight: 20,
   },
 });
 

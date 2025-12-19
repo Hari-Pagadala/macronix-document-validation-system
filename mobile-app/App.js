@@ -106,7 +106,7 @@ export default function App() {
           name="CaseListing"
           component={CaseListingScreen}
           options={{
-            title: 'My Cases',
+            title: 'Macronix',
           }}
         />
         <Stack.Screen

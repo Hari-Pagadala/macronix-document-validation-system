@@ -19,6 +19,8 @@ import * as Location from 'expo-location';
 import { Camera } from 'expo-camera';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as ImageManipulator from 'expo-image-manipulator';
+import ViewShot from 'react-native-view-shot';
+import { getFastLocation, reverseGeocodeSingleLine, getStaticMapImage } from '../services/locationService';
 import { verificationService } from '../services/apiService';
 import { uploadToImageKit, uploadMultipleToImageKit } from '../services/imagekitService';
 
@@ -49,6 +51,14 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
   const [respondentSignature, setRespondentSignature] = useState(null);
   const [showOfficerSigModal, setShowOfficerSigModal] = useState(false);
   const [showRespondentSigModal, setShowRespondentSigModal] = useState(false);
+
+  // Watermarking helpers (hidden off-screen renderer)
+  const viewShotRef = useRef(null);
+  const wmResolverRef = useRef(null);
+  const [wmTask, setWmTask] = useState(null); // { uri, gps{lat,lng}, timestamp }
+  const [wmSize, setWmSize] = useState({ width: 0, height: 0 });
+  const [wmTargetSize, setWmTargetSize] = useState({ width: 0, height: 0 });
+  const [wmImageLoaded, setWmImageLoaded] = useState(false);
 
   useEffect(() => {
     initializeForm();
@@ -124,28 +134,74 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
     }
   };
 
-  // Add GPS metadata to image
-  const addGPSWatermark = async (imageUri, location) => {
-    try {
-      // Return the image with GPS metadata attached
-      // The GPS coordinates will be displayed in the UI and sent to backend
-      return {
-        uri: imageUri,
-        name: `photo_${Date.now()}.jpg`,
-        type: 'image/jpeg',
-        gpsLat: location.lat,
-        gpsLng: location.lng,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
-      console.error('Error adding GPS metadata:', error);
-      return {
-        uri: imageUri,
-        name: `photo_${Date.now()}.jpg`,
-        type: 'image/jpeg',
-      };
-    }
+  // Add GPS watermark by composing an off-screen view and capturing it
+  const addGPSWatermark = (imageUri, location, addressText = '') => {
+    return new Promise((resolve) => {
+      wmResolverRef.current = resolve;
+      const ts = new Date();
+      // Get original image size to compute target render size (cap width at 1200)
+      Image.getSize(
+        imageUri,
+        (w, h) => {
+          const maxW = 1200;
+          const scale = w > maxW ? maxW / w : 1;
+          const targetW = Math.round(w * scale);
+          const targetH = Math.round(h * scale);
+          setWmSize({ width: w, height: h });
+          setWmTargetSize({ width: targetW, height: targetH });
+          setWmImageLoaded(false);
+          setWmTask({ uri: imageUri, gps: location, timestamp: ts, address: addressText });
+        },
+        () => {
+          // Fallback if size fails
+          const targetW = 1000;
+          const targetH = 1500;
+          setWmSize({ width: targetW, height: targetH });
+          setWmTargetSize({ width: targetW, height: targetH });
+          setWmImageLoaded(false);
+          setWmTask({ uri: imageUri, gps: location, timestamp: new Date(), address: addressText });
+        }
+      );
+    });
   };
+
+  // When image finishes loading inside the hidden renderer, capture and resolve
+  useEffect(() => {
+    const captureIfReady = async () => {
+      if (!wmTask || !wmImageLoaded || !viewShotRef.current) return;
+      try {
+        const capturedUri = await viewShotRef.current.capture();
+        const result = {
+          uri: capturedUri,
+          name: `photo_${Date.now()}.jpg`,
+          type: 'image/jpeg',
+          gpsLat: wmTask.gps?.lat,
+          gpsLng: wmTask.gps?.lng,
+          timestamp: wmTask.timestamp?.toISOString?.() || new Date().toISOString(),
+          address: wmTask.address || '',
+        };
+        // Clear task before resolving
+        setWmTask(null);
+        setWmImageLoaded(false);
+        wmResolverRef.current && wmResolverRef.current(result);
+      } catch (e) {
+        console.warn('Watermark capture failed, returning original:', e?.message);
+        const fallback = {
+          uri: wmTask?.uri,
+          name: `photo_${Date.now()}.jpg`,
+          type: 'image/jpeg',
+          gpsLat: wmTask?.gps?.lat,
+          gpsLng: wmTask?.gps?.lng,
+          timestamp: new Date().toISOString(),
+          address: wmTask?.address || '',
+        };
+        setWmTask(null);
+        setWmImageLoaded(false);
+        wmResolverRef.current && wmResolverRef.current(fallback);
+      }
+    };
+    captureIfReady();
+  }, [wmTask, wmImageLoaded]);
 
   // Capture photo with camera and add GPS metadata (non-blocking for camera open)
   const capturePhotoWithGPS = async (setter, isMultiple = false) => {
@@ -161,21 +217,23 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
         // Get fastest possible location without blocking camera open
         let currentGPS = { lat: gps.lat, lng: gps.lng };
         try {
-          let loc = await Location.getLastKnownPositionAsync();
-          if (!loc) {
-            loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
+          const loc = await getFastLocation();
+          if (loc?.coords) {
+            currentGPS = {
+              lat: loc.coords.latitude.toString(),
+              lng: loc.coords.longitude.toString(),
+            };
+            setGps(currentGPS);
           }
-          currentGPS = {
-            lat: loc.coords.latitude.toString(),
-            lng: loc.coords.longitude.toString(),
-          };
-          setGps(currentGPS);
-        } catch (locErr) {
-          // Keep existing gps if available; don't block capture
-          console.warn('Location slow/unavailable, using cached GPS');
-        }
+        } catch {}
 
-        const photoWithGPS = await addGPSWatermark(result.assets[0].uri, currentGPS);
+        // Reverse geocode and static map
+        const address = await reverseGeocodeSingleLine(currentGPS.lat, currentGPS.lng);
+        const mapLocalUri = await getStaticMapImage(currentGPS.lat, currentGPS.lng, { zoom: 16, width: 600, height: 400 });
+
+        const photoWithGPS = await addGPSWatermark(result.assets[0].uri, currentGPS, address);
+        photoWithGPS.address = address;
+        photoWithGPS.mapLocalUri = mapLocalUri;
 
         if (isMultiple) {
           setter(prev => [...prev, photoWithGPS]);
@@ -200,11 +258,31 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
+        // Capture location/address/static map at selection time
+        let currentGPS = { lat: gps.lat, lng: gps.lng };
+        try {
+          const loc = await getFastLocation();
+          if (loc?.coords) {
+            currentGPS = {
+              lat: loc.coords.latitude.toString(),
+              lng: loc.coords.longitude.toString(),
+            };
+            setGps(currentGPS);
+          }
+        } catch {}
+        const address = await reverseGeocodeSingleLine(currentGPS.lat, currentGPS.lng);
+        const mapLocalUri = await getStaticMapImage(currentGPS.lat, currentGPS.lng, { zoom: 16, width: 600, height: 400 });
+
         if (isMultiple) {
           const images = result.assets.map(asset => ({
             uri: asset.uri,
             name: asset.fileName || `document_${Date.now()}.jpg`,
             type: asset.type || 'image/jpeg',
+            gpsLat: currentGPS.lat,
+            gpsLng: currentGPS.lng,
+            timestamp: new Date().toISOString(),
+            address,
+            mapLocalUri,
           }));
           setter(prev => [...prev, ...images]);
         } else {
@@ -212,6 +290,11 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
             uri: result.assets[0].uri,
             name: result.assets[0].fileName || `document_${Date.now()}.jpg`,
             type: result.assets[0].type || 'image/jpeg',
+            gpsLat: currentGPS.lat,
+            gpsLng: currentGPS.lng,
+            timestamp: new Date().toISOString(),
+            address,
+            mapLocalUri,
           });
         }
       }
@@ -308,6 +391,10 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
           }));
           imagekitUrls.documents = await uploadMultipleToImageKit(docFiles, 'documents');
           console.log('[ImageKit] Documents uploaded:', imagekitUrls.documents);
+
+          // Upload static maps for documents, if present
+          const docMapFiles = documents.map((doc, idx) => doc.mapLocalUri ? { uri: doc.mapLocalUri, name: `doc_map_${idx}_${Date.now()}.png` } : null).filter(Boolean);
+          imagekitUrls.documentsMaps = docMapFiles.length ? await uploadMultipleToImageKit(docMapFiles, 'maps') : [];
         }
 
         // Upload house photos
@@ -319,6 +406,10 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
           }));
           imagekitUrls.photos = await uploadMultipleToImageKit(photoFiles, 'photos');
           console.log('[ImageKit] Photos uploaded:', imagekitUrls.photos);
+
+          // Upload static maps for house photos
+          const mapFiles = housePhotos.map((photo, idx) => photo.mapLocalUri ? { uri: photo.mapLocalUri, name: `photo_map_${idx}_${Date.now()}.png` } : null).filter(Boolean);
+          imagekitUrls.photosMaps = mapFiles.length ? await uploadMultipleToImageKit(mapFiles, 'maps') : [];
         }
 
         // Upload selfie with house
@@ -330,6 +421,14 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
             'selfies'
           );
           console.log('[ImageKit] Selfie uploaded:', imagekitUrls.selfieWithHouse);
+
+          if (selfieWithHouse.mapLocalUri) {
+            imagekitUrls.selfieWithHouseMap = await uploadToImageKit(
+              selfieWithHouse.mapLocalUri,
+              `selfie_map_${Date.now()}.png`,
+              'maps'
+            );
+          }
         }
 
         // Upload candidate with respondent
@@ -341,6 +440,14 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
             'candidates'
           );
           console.log('[ImageKit] Candidate photo uploaded:', imagekitUrls.candidateWithRespondent);
+
+          if (candidateWithRespondent.mapLocalUri) {
+            imagekitUrls.candidateWithRespondentMap = await uploadToImageKit(
+              candidateWithRespondent.mapLocalUri,
+              `candidate_map_${Date.now()}.png`,
+              'maps'
+            );
+          }
         }
 
         // Upload signatures
@@ -375,22 +482,48 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
       // Step 3: Prepare submission payload with ImageKit URLs
       console.log('Preparing submission with ImageKit URLs...');
       
-      // Capture GPS at submission time (per-case)
+      // Capture GPS at submission time (per-case) + address + static map
       let submissionGps = { lat: gps.lat, lng: gps.lng };
       try {
-        let loc = await Location.getLastKnownPositionAsync();
-        if (!loc) {
-          loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Low });
+        const loc = await getFastLocation();
+        if (loc?.coords) {
+          submissionGps = {
+            lat: loc.coords.latitude.toString(),
+            lng: loc.coords.longitude.toString(),
+          };
         }
-        submissionGps = {
-          lat: loc.coords.latitude.toString(),
-          lng: loc.coords.longitude.toString(),
-        };
       } catch (e) {
         console.warn('Submit GPS fallback to cached', e?.message);
       }
 
+      const submissionAddress = await reverseGeocodeSingleLine(submissionGps.lat, submissionGps.lng);
+      const submissionMapLocal = await getStaticMapImage(submissionGps.lat, submissionGps.lng, { zoom: 16, width: 600, height: 400 });
+      let submissionMapUrl = null;
+      if (submissionMapLocal) {
+        try {
+          submissionMapUrl = await uploadToImageKit(
+            submissionMapLocal,
+            `submission_map_${Date.now()}.png`,
+            'maps'
+          );
+        } catch {}
+      }
+
       // Build JSON payload with ImageKit URLs (not base64)
+      const photosMeta = (housePhotos || []).map((p, idx) => ({
+        lat: p.gpsLat || '',
+        lng: p.gpsLng || '',
+        timestamp: p.timestamp || '',
+        address: p.address || '',
+        mapImageUrl: imagekitUrls.photosMaps?.[idx] || null,
+      }));
+      const documentsMeta = (documents || []).map((d, idx) => ({
+        lat: d.gpsLat || '',
+        lng: d.gpsLng || '',
+        timestamp: d.timestamp || '',
+        address: d.address || '',
+        mapImageUrl: imagekitUrls.documentsMaps?.[idx] || null,
+      }));
       const payload = {
         ...form,
         action: actionType,
@@ -398,6 +531,8 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
         submissionGpsLat: submissionGps.lat || '',
         submissionGpsLng: submissionGps.lng || '',
         submissionTimestamp: new Date().toISOString(),
+        submissionAddress,
+        submissionMapImageUrl: submissionMapUrl,
         // ImageKit URLs instead of local files
         documents: imagekitUrls.documents || [],
         photos: imagekitUrls.photos || [],
@@ -405,6 +540,23 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
         candidateWithRespondent: imagekitUrls.candidateWithRespondent || null,
         officerSignature: imagekitUrls.officerSignature || null,
         respondentSignature: imagekitUrls.respondentSignature || null,
+        // Additional metadata (backend may ignore these safely)
+        documentsMeta,
+        selfieWithHouseMeta: selfieWithHouse ? {
+          lat: selfieWithHouse.gpsLat || '',
+          lng: selfieWithHouse.gpsLng || '',
+          timestamp: selfieWithHouse.timestamp || '',
+          address: selfieWithHouse.address || '',
+          mapImageUrl: imagekitUrls.selfieWithHouseMap || null,
+        } : null,
+        candidateWithRespondentMeta: candidateWithRespondent ? {
+          lat: candidateWithRespondent.gpsLat || '',
+          lng: candidateWithRespondent.gpsLng || '',
+          timestamp: candidateWithRespondent.timestamp || '',
+          address: candidateWithRespondent.address || '',
+          mapImageUrl: imagekitUrls.candidateWithRespondentMap || null,
+        } : null,
+        photosMeta,
       };
 
       console.log('Submitting verification with ImageKit URLs...', payload);
@@ -716,6 +868,33 @@ const SubmitVerificationScreen = ({ route, navigation }) => {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Hidden off-screen renderer for watermarking */}
+      {wmTask && (
+        <View style={styles.offscreenContainer} pointerEvents="none">
+          <ViewShot
+            ref={viewShotRef}
+            options={{ format: 'jpg', quality: 0.9, result: 'tmpfile' }}
+            style={{ width: wmTargetSize.width, height: wmTargetSize.height }}
+          >
+            <Image
+              source={{ uri: wmTask.uri }}
+              style={{ width: wmTargetSize.width, height: wmTargetSize.height }}
+              onLoadEnd={() => setWmImageLoaded(true)}
+              resizeMode="cover"
+            />
+            <View style={styles.watermarkBar}>
+              <Text style={styles.watermarkText}>
+                Lat: {wmTask.gps?.lat || ''}   Lng: {wmTask.gps?.lng || ''}
+              </Text>
+              <Text style={styles.watermarkText}>{new Date(wmTask.timestamp).toLocaleString()}</Text>
+              {!!wmTask.address && (
+                <Text style={styles.watermarkAddress}>{wmTask.address}</Text>
+              )}
+            </View>
+          </ViewShot>
+        </View>
+      )}
 
       {/* Signature Modals */}
       <SignatureModal
@@ -1112,6 +1291,34 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  offscreenContainer: {
+    position: 'absolute',
+    left: -10000,
+    top: -10000,
+    opacity: 0,
+  },
+  watermarkBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+  },
+  watermarkText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
+  },
+  watermarkAddress: {
+    color: '#fff',
+    fontSize: 14,
+    marginTop: 4,
   },
 });
 
