@@ -43,6 +43,7 @@ import UploadExcel from '../components/UploadExcel';
 import VendorManagement from '../components/VendorManagement';
 import FieldOfficerManagement from '../components/FieldOfficerManagement';
 import DownloadReportsDialog from '../components/DownloadReportsDialog';
+import DownloadApprovedCasesModal from '../components/DownloadApprovedCasesModal';
 import axios from 'axios';
 
 const drawerWidth = 240;
@@ -57,6 +58,7 @@ const Dashboard = () => {
   const [sideNavOpen, setSideNavOpen] = useState(false);
   const [activeSection, setActiveSection] = useState('dashboard');
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [downloadApprovedCasesModalOpen, setDownloadApprovedCasesModalOpen] = useState(false);
 
   useEffect(() => {
     if (token) {
@@ -363,6 +365,15 @@ const Dashboard = () => {
           >
             Download Reports
           </Button>
+          <Button
+            variant="outlined"
+            color="inherit"
+            startIcon={<DownloadIcon />}
+            onClick={() => setDownloadApprovedCasesModalOpen(true)}
+            sx={{ mr: 2 }}
+          >
+            Download All Approved Cases
+          </Button>
           <IconButton
             color="inherit"
             onClick={handleMenuOpen}
@@ -425,6 +436,12 @@ const Dashboard = () => {
       <DownloadReportsDialog 
         open={downloadDialogOpen} 
         onClose={() => setDownloadDialogOpen(false)} 
+      />
+
+      {/* Download Approved Cases Modal */}
+      <DownloadApprovedCasesModal
+        open={downloadApprovedCasesModalOpen}
+        onClose={() => setDownloadApprovedCasesModalOpen(false)}
       />
     </Box>
   );

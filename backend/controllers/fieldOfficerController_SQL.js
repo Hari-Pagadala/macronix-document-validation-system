@@ -452,10 +452,33 @@ exports.submitVerification = async (req, res) => {
         }
 
         const saveBase64File = (base64Data, filename) => {
-            const filepath = path.join(uploadDir, filename);
-            const buffer = Buffer.from(base64Data, 'base64');
-            fs.writeFileSync(filepath, buffer);
-            return filename;
+            try {
+                const filepath = path.join(uploadDir, filename);
+                
+                // Strip data URI prefix if present (e.g., 'data:image/png;base64,')
+                let cleanBase64 = base64Data;
+                if (typeof base64Data === 'string' && base64Data.includes('base64,')) {
+                    cleanBase64 = base64Data.split('base64,')[1];
+                }
+                
+                // Decode base64 to buffer
+                const buffer = Buffer.from(cleanBase64, 'base64');
+                
+                // Validate buffer size (must be at least 69 bytes for smallest valid PNG)
+                // Corrupted signatures are typically exactly 68 bytes
+                if (buffer.length < 69) {
+                    console.error(`[Upload] Image too small (${buffer.length} bytes), likely corrupted: ${filename}`);
+                    return null;
+                }
+                
+                // Write to file
+                fs.writeFileSync(filepath, buffer);
+                console.log(`[Upload] Saved ${filename} (${buffer.length} bytes)`);
+                return filename;
+            } catch (error) {
+                console.error(`[Upload] Failed to save ${filename}:`, error.message);
+                return null;
+            }
         };
 
         let officerSignaturePath = null;
@@ -534,6 +557,18 @@ exports.submitVerification = async (req, res) => {
             const filename = `candidate_${Date.now()}.${ext}`;
             candidateUrl = saveBase64File(files.candidateWithRespondent.data, filename);
           }
+        }
+
+        // Final validation: ensure signatures were successfully saved
+        if (!officerSignaturePath || !respondentSignaturePath) {
+            console.error('[Submit] Signature save failed:', { 
+                officerSignaturePath, 
+                respondentSignaturePath 
+            });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Failed to save signature images. Please ensure images are valid PNG/JPEG format.' 
+            });
         }
 
         const payload = {

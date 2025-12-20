@@ -19,7 +19,8 @@ import {
   Close as CloseIcon,
   ZoomIn as ZoomInIcon,
   ZoomOut as ZoomOutIcon,
-  RestartAlt as ResetIcon
+  RestartAlt as ResetIcon,
+  Download as DownloadIcon
 } from '@mui/icons-material';
 import axios from 'axios';
 // ImageKit images displayed as regular img tags with URL transformations
@@ -51,6 +52,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
   const [showReinitiateConfirm, setShowReinitiateConfirm] = useState(false);
   const [showSendBackConfirm, setShowSendBackConfirm] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [downloading, setDownloading] = useState(false);
   // Image preview (lightbox)
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSrc, setPreviewSrc] = useState('');
@@ -303,6 +305,39 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
       console.error('Error sending case back:', err);
     } finally {
       setSendingBack(false);
+    }
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      setDownloading(true);
+      setError('');
+      
+      const response = await axios.get(
+        `http://localhost:5000/api/download/case/${recordId}/pdf`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          },
+          responseType: 'blob'
+        }
+      );
+
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Case_${record?.caseNumber || recordId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+    } catch (err) {
+      setError('Failed to download PDF: ' + (err.response?.data?.message || err.message));
+      console.error('Error downloading PDF:', err);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -605,6 +640,23 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
 
       <DialogActions sx={{ p: 2, background: '#f9fafb', justifyContent: 'space-between' }}>
         <Box sx={{ display: 'flex', gap: 1 }}>
+          {record?.status === 'approved' && (
+            <Button 
+              onClick={handleDownloadPDF}
+              variant="contained"
+              color="primary"
+              disabled={downloading}
+              startIcon={<DownloadIcon />}
+              sx={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                '&:hover': {
+                  background: 'linear-gradient(135deg, #5568d3 0%, #6a3f99 100%)'
+                }
+              }}
+            >
+              {downloading ? 'Downloading...' : 'Download Case PDF'}
+            </Button>
+          )}
           {record?.status === 'submitted' && (
             <>
               <Button 

@@ -17,7 +17,8 @@ import {
   Alert,
   Menu,
   MenuItem,
-  Typography
+  Typography,
+  Button
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -168,25 +169,29 @@ const RecordsTable = ({ status = 'all' }) => {
     setEditModalOpen(false);
   };
 
+
+
   return (
     <>
       <Paper sx={{ width: '100%', overflow: 'hidden' }}>
         <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-          <TextField
-            fullWidth
-            placeholder="Search by Case Number, Reference, Name, Phone..."
-            value={search}
-            onChange={handleSearch}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon />
-                </InputAdornment>
-              ),
-            }}
-            variant="outlined"
-            size="small"
-          />
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <TextField
+              placeholder="Search by Case Number, Reference, Name, Phone..."
+              value={search}
+              onChange={handleSearch}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon />
+                  </InputAdornment>
+                ),
+              }}
+              variant="outlined"
+              size="small"
+              sx={{ flex: 1, mr: 2 }}
+            />
+          </Box>
         </Box>
 
         {error && (
