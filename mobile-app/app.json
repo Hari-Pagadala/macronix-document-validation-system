@@ -34,7 +34,7 @@
     }
     ,
     "extra": {
-      "EXPO_PUBLIC_API_BASE_URL": "http://192.168.1.16:5000/api",
+      "EXPO_PUBLIC_API_BASE_URL": "http://192.168.1.20:5000/api",
       "EXPO_PUBLIC_IMAGEKIT_ENDPOINT": "https://ik.imagekit.io/g6rdi7spf",
       "EXPO_PUBLIC_IMAGEKIT_PUBLIC_KEY": "public_jnmn+DPEtMjBKnAKHgFbNRN4OxA=",
       "EXPO_PUBLIC_STATIC_MAP_PROVIDER": "google",
