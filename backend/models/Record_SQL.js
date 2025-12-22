@@ -38,7 +38,7 @@ const Record = sequelize.define('Record', {
         type: DataTypes.STRING
     },
     status: {
-        type: DataTypes.ENUM('pending', 'vendor_assigned', 'assigned', 'submitted', 'approved', 'insufficient', 'rejected', 'stopped'),
+        type: DataTypes.ENUM('pending', 'vendor_assigned', 'candidate_assigned', 'assigned', 'submitted', 'approved', 'insufficient', 'rejected', 'stopped'),
         defaultValue: 'pending'
     },
     remarks: {
@@ -55,6 +55,18 @@ const Record = sequelize.define('Record', {
     },
     assignedFieldOfficerName: {
         type: DataTypes.STRING
+    },
+    candidateName: {
+        type: DataTypes.STRING,
+        comment: 'Candidate name for self-submission'
+    },
+    candidateEmail: {
+        type: DataTypes.STRING,
+        comment: 'Candidate email for self-submission'
+    },
+    candidateMobile: {
+        type: DataTypes.STRING,
+        comment: 'Candidate mobile for self-submission'
     },
     assignedDate: {
         type: DataTypes.DATE

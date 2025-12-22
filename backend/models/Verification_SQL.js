@@ -14,16 +14,25 @@ const Verification = sequelize.define('Verification', {
   },
   fieldOfficerId: {
     type: DataTypes.UUID,
-    allowNull: false
+    allowNull: true
   },
   respondentName: DataTypes.STRING,
   respondentRelationship: DataTypes.STRING,
   respondentContact: DataTypes.STRING,
   periodOfStay: DataTypes.STRING,
   ownershipType: DataTypes.STRING,
+  ownerName: DataTypes.STRING,
+  relationWithOwner: DataTypes.STRING,
+  address: DataTypes.TEXT,
+  city: DataTypes.STRING,
+  state: DataTypes.STRING,
+  pincode: DataTypes.STRING,
+  landmark: DataTypes.STRING,
+  verificationNotes: DataTypes.TEXT,
   verificationDate: DataTypes.DATEONLY,
   comments: DataTypes.TEXT,
   insufficientReason: DataTypes.TEXT,
+  verifiedBy: DataTypes.STRING,
   status: {
     type: DataTypes.ENUM('submitted', 'insufficient'),
     defaultValue: 'submitted'

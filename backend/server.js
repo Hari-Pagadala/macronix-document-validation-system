@@ -31,6 +31,11 @@ const FieldOfficer = require('./models/FieldOfficer_SQL');
 const Record = require('./models/Record_SQL');
 const Counter = require('./models/Counter_SQL');
 const Verification = require('./models/Verification_SQL');
+const CandidateToken = require('./models/CandidateToken_SQL');
+
+// Set up model associations
+CandidateToken.belongsTo(Record, { as: 'record', foreignKey: 'recordId' });
+Record.hasMany(CandidateToken, { as: 'candidateTokens', foreignKey: 'recordId' });
 
 // Database connection and sync
 sequelize.authenticate()
@@ -55,6 +60,7 @@ const vendorPortalRoutes = require('./routes/vendorPortalRoutes');
 const foPortalRoutes = require('./routes/foPortalRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const downloadRoutes = require('./routes/downloadRoutes');
+const candidateRoutes = require('./routes/candidateRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/records', recordRoutes);
@@ -64,6 +70,7 @@ app.use('/api/vendor-portal', vendorPortalRoutes);
 app.use('/api/fo-portal', foPortalRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/download', downloadRoutes);
+app.use('/api/candidate', candidateRoutes); // Public routes for candidate submission
 
 // Health check endpoints
 app.get('/', (req, res) => {

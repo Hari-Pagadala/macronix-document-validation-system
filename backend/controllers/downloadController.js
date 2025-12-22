@@ -342,7 +342,7 @@ const generateCasePDF = async (record, verification, vendorName, fieldOfficerNam
       drawTable(caseTableData, [pageWidth / 3, (pageWidth * 2) / 3]);
       doc.moveDown(1);
 
-      // Verification Details Table
+      // Verification Details Table - Different for candidate vs FO submissions
       const verifyStartY = doc.y;
       doc.save();
       doc.rect(leftX, verifyStartY, pageWidth, 24).fill('#0f172a');
@@ -350,17 +350,39 @@ const generateCasePDF = async (record, verification, vendorName, fieldOfficerNam
       doc.text('Verification Details', leftX + 10, verifyStartY + 6, { width: pageWidth - 20, align: 'left' });
       doc.restore();
       doc.y = verifyStartY + 24 + 6;
-      const verifyTableData = [
-        ['Field', 'Value'],
-        ['Respondent Name', verification.respondentName || 'N/A'],
-        ['Relationship', verification.respondentRelationship || 'N/A'],
-        ['Respondent Contact', verification.respondentContact || 'N/A'],
-        ['Ownership Type', verification.ownershipType || 'N/A'],
-        ['Period of Stay', verification.periodOfStay || 'N/A'],
-        ['Verification Date', verification.verificationDate || 'N/A'],
-        ['Comments', verification.comments || 'N/A'],
-        ['Insufficient Reason', verification.insufficientReason || 'N/A'],
-      ];
+      
+      let verifyTableData;
+      if (!verification.fieldOfficerId) {
+        // Candidate submission - show only relevant fields
+        verifyTableData = [
+          ['Field', 'Value'],
+          ['Submitted By', verification.verifiedBy || 'Candidate'],
+          ['Ownership Type', verification.ownershipType || 'N/A'],
+        ];
+        if (verification.ownerName) {
+          verifyTableData.push(['Owner Name', verification.ownerName]);
+        }
+        if (verification.relationWithOwner) {
+          verifyTableData.push(['Relation with Owner', verification.relationWithOwner]);
+        }
+        verifyTableData.push(
+          ['Period of Stay', verification.periodOfStay || 'N/A'],
+          ['Verification Notes', verification.verificationNotes || 'N/A']
+        );
+      } else {
+        // Field Officer submission - show all fields
+        verifyTableData = [
+          ['Field', 'Value'],
+          ['Respondent Name', verification.respondentName || 'N/A'],
+          ['Relationship', verification.respondentRelationship || 'N/A'],
+          ['Respondent Contact', verification.respondentContact || 'N/A'],
+          ['Ownership Type', verification.ownershipType || 'N/A'],
+          ['Period of Stay', verification.periodOfStay || 'N/A'],
+          ['Verification Date', verification.verificationDate || 'N/A'],
+          ['Comments', verification.comments || 'N/A'],
+          ['Insufficient Reason', verification.insufficientReason || 'N/A'],
+        ];
+      }
       drawTable(verifyTableData, [pageWidth / 3, (pageWidth * 2) / 3]);
       doc.moveDown(2);
 
@@ -385,35 +407,72 @@ const generateCasePDF = async (record, verification, vendorName, fieldOfficerNam
       drawTable(gpsTableData, [pageWidth / 3, (pageWidth * 2) / 3]);
       doc.moveDown(1.5);
 
-      // Photos Section - Each image on separate section with proper spacing
+      // Photos Section - Different labels for candidate vs FO submissions
       
-      // Selfie with House
-      if (verification.selfieWithHousePath) {
-        await addImageToDoc(doc, verification.selfieWithHousePath, 'Selfie with House', leftX, pageWidth);
-        console.log('[PDF] Selfie with house image added');
+      // Check if it's a candidate submission
+      const isCandidateSubmission = !verification.fieldOfficerId;
+      
+      if (isCandidateSubmission) {
+        // Candidate Submission Images
+        
+        // Candidate Selfie
+        if (verification.candidateWithRespondentPath) {
+          await addImageToDoc(doc, verification.candidateWithRespondentPath, 'Candidate Selfie', leftX, pageWidth);
+          console.log('[PDF] Candidate selfie image added');
+        }
+        
+        // Candidate House Photo
+        const photos = verification.photos || [];
+        console.log('[PDF] Candidate house photos array:', photos);
+        for (let i = 0; i < photos.length; i++) {
+          console.log(`[PDF] Processing house photo ${i + 1}:`, photos[i]);
+          await addImageToDoc(doc, photos[i], `Candidate House Photo ${photos.length > 1 ? i + 1 : ''}`, leftX, pageWidth);
+          console.log(`[PDF] Candidate house photo ${i + 1} added`);
+        }
+        
+        // Candidate Selfie with House
+        if (verification.selfieWithHousePath) {
+          await addImageToDoc(doc, verification.selfieWithHousePath, 'Candidate Selfie with House', leftX, pageWidth);
+          console.log('[PDF] Candidate selfie with house image added');
+        }
+        
+        // Additional Documents
+        const docs = verification.documents || [];
+        for (let i = 0; i < docs.length; i++) {
+          await addImageToDoc(doc, docs[i], `Additional Document ${i + 1}`, leftX, pageWidth);
+          console.log(`[PDF] Additional document ${i + 1} added`);
+        }
+      } else {
+        // Field Officer Submission Images
+        
+        // Selfie with House
+        if (verification.selfieWithHousePath) {
+          await addImageToDoc(doc, verification.selfieWithHousePath, 'Selfie with House', leftX, pageWidth);
+          console.log('[PDF] Selfie with house image added');
+        }
+
+        // Candidate with Respondent
+        if (verification.candidateWithRespondentPath) {
+          await addImageToDoc(doc, verification.candidateWithRespondentPath, 'Candidate with Respondent', leftX, pageWidth);
+          console.log('[PDF] Candidate with respondent image added');
+        }
+
+        // House Photos
+        const photos = verification.photos || [];
+        for (let i = 0; i < photos.length; i++) {
+          await addImageToDoc(doc, photos[i], `House Photo ${i + 1}`, leftX, pageWidth);
+          console.log(`[PDF] House photo ${i + 1} added`);
+        }
+
+        // Documents
+        const docs = verification.documents || [];
+        for (let i = 0; i < docs.length; i++) {
+          await addImageToDoc(doc, docs[i], `Document ${i + 1}`, leftX, pageWidth);
+          console.log(`[PDF] Document ${i + 1} added`);
+        }
       }
 
-      // Candidate with Respondent
-      if (verification.candidateWithRespondentPath) {
-        await addImageToDoc(doc, verification.candidateWithRespondentPath, 'Candidate with Respondent', leftX, pageWidth);
-        console.log('[PDF] Candidate with respondent image added');
-      }
-
-      // House Photos
-      const photos = verification.photos || [];
-      for (let i = 0; i < photos.length; i++) {
-        await addImageToDoc(doc, photos[i], `House Photo ${i + 1}`, leftX, pageWidth);
-        console.log(`[PDF] House photo ${i + 1} added`);
-      }
-
-      // Documents
-      const docs = verification.documents || [];
-      for (let i = 0; i < docs.length; i++) {
-        await addImageToDoc(doc, docs[i], `Document ${i + 1}`, leftX, pageWidth);
-        console.log(`[PDF] Document ${i + 1} added`);
-      }
-
-      // Signatures Section - only add page if not enough space for signatures (need ~180px)
+      // Signatures Section - Different layout for candidate vs FO submissions
       if (doc.y > doc.page.height - 180) {
         doc.addPage();
       }
@@ -427,65 +486,94 @@ const generateCasePDF = async (record, verification, vendorName, fieldOfficerNam
       doc.restore();
       doc.y = sigSectionY + 30;
 
-      // Officer and Respondent signatures side by side
       const sigWidth = 200;
       const sigHeight = 100;
       const sigY = doc.y;
-      const sig1X = leftX + 40;
-      const sig2X = leftX + pageWidth - sigWidth - 40;
 
-      // Officer Signature
-      doc.fontSize(10).fillColor('#374151').text('Field Officer Signature', sig1X, sigY);
-      doc.rect(sig1X, sigY + 20, sigWidth, sigHeight).stroke('#d1d5db');
-      
-      if (verification.officerSignaturePath) {
-        try {
-          const sigBuffer = await fetchImage(verification.officerSignaturePath);
-          if (sigBuffer) {
-            // Validate the image can be opened before adding to doc
-            try {
-              const testImg = doc.openImage(sigBuffer);
-              doc.image(sigBuffer, sig1X + 10, sigY + 30, { fit: [sigWidth - 20, sigHeight - 20] });
-            } catch (imgError) {
-              console.error('[PDF] Corrupted officer signature:', verification.officerSignaturePath, imgError.message);
-              doc.fontSize(9).fillColor('#ef4444').text('Corrupted Image', sig1X + 55, sigY + 60);
+      if (isCandidateSubmission) {
+        // Candidate submission - show only candidate signature (centered)
+        const sigX = leftX + (pageWidth - sigWidth) / 2;
+        
+        doc.fontSize(10).fillColor('#374151').text('Candidate Signature', sigX, sigY);
+        doc.rect(sigX, sigY + 20, sigWidth, sigHeight).stroke('#d1d5db');
+        
+        if (verification.officerSignaturePath) {
+          try {
+            const sigBuffer = await fetchImage(verification.officerSignaturePath);
+            if (sigBuffer) {
+              try {
+                const testImg = doc.openImage(sigBuffer);
+                doc.image(sigBuffer, sigX + 10, sigY + 30, { fit: [sigWidth - 20, sigHeight - 20] });
+              } catch (imgError) {
+                console.error('[PDF] Corrupted candidate signature:', verification.officerSignaturePath, imgError.message);
+                doc.fontSize(9).fillColor('#ef4444').text('Corrupted Image', sigX + 55, sigY + 60);
+              }
+            } else {
+              doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sigX + 60, sigY + 60);
             }
-          } else {
-            doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sig1X + 60, sigY + 60);
+          } catch (e) {
+            console.error('[PDF] Error adding candidate signature:', e.message);
+            doc.fontSize(9).fillColor('#ef4444').text('Error Loading', sigX + 55, sigY + 60);
           }
-        } catch (e) {
-          console.error('[PDF] Error adding officer signature:', e.message);
-          doc.fontSize(9).fillColor('#ef4444').text('Error Loading', sig1X + 55, sigY + 60);
+        } else {
+          doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sigX + 60, sigY + 60);
         }
       } else {
-        doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sig1X + 60, sigY + 60);
-      }
+        // Field Officer submission - show both signatures side by side
+        const sig1X = leftX + 40;
+        const sig2X = leftX + pageWidth - sigWidth - 40;
 
-      // Respondent Signature
-      doc.fontSize(10).fillColor('#374151').text('Respondent Signature', sig2X, sigY);
-      doc.rect(sig2X, sigY + 20, sigWidth, sigHeight).stroke('#d1d5db');
-      
-      if (verification.respondentSignaturePath) {
-        try {
-          const sigBuffer = await fetchImage(verification.respondentSignaturePath);
-          if (sigBuffer) {
-            // Validate the image can be opened before adding to doc
-            try {
-              const testImg = doc.openImage(sigBuffer);
-              doc.image(sigBuffer, sig2X + 10, sigY + 30, { fit: [sigWidth - 20, sigHeight - 20] });
-            } catch (imgError) {
-              console.error('[PDF] Corrupted respondent signature:', verification.respondentSignaturePath, imgError.message);
-              doc.fontSize(9).fillColor('#ef4444').text('Corrupted Image', sig2X + 55, sigY + 60);
+        // Officer Signature
+        doc.fontSize(10).fillColor('#374151').text('Field Officer Signature', sig1X, sigY);
+        doc.rect(sig1X, sigY + 20, sigWidth, sigHeight).stroke('#d1d5db');
+        
+        if (verification.officerSignaturePath) {
+          try {
+            const sigBuffer = await fetchImage(verification.officerSignaturePath);
+            if (sigBuffer) {
+              try {
+                const testImg = doc.openImage(sigBuffer);
+                doc.image(sigBuffer, sig1X + 10, sigY + 30, { fit: [sigWidth - 20, sigHeight - 20] });
+              } catch (imgError) {
+                console.error('[PDF] Corrupted officer signature:', verification.officerSignaturePath, imgError.message);
+                doc.fontSize(9).fillColor('#ef4444').text('Corrupted Image', sig1X + 55, sigY + 60);
+              }
+            } else {
+              doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sig1X + 60, sigY + 60);
             }
-          } else {
-            doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sig2X + 60, sigY + 60);
+          } catch (e) {
+            console.error('[PDF] Error adding officer signature:', e.message);
+            doc.fontSize(9).fillColor('#ef4444').text('Error Loading', sig1X + 55, sigY + 60);
           }
-        } catch (e) {
-          console.error('[PDF] Error adding respondent signature:', e.message);
-          doc.fontSize(9).fillColor('#ef4444').text('Error Loading', sig2X + 55, sigY + 60);
+        } else {
+          doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sig1X + 60, sigY + 60);
         }
-      } else {
-        doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sig2X + 60, sigY + 60);
+
+        // Respondent Signature
+        doc.fontSize(10).fillColor('#374151').text('Respondent Signature', sig2X, sigY);
+        doc.rect(sig2X, sigY + 20, sigWidth, sigHeight).stroke('#d1d5db');
+        
+        if (verification.respondentSignaturePath) {
+          try {
+            const sigBuffer = await fetchImage(verification.respondentSignaturePath);
+            if (sigBuffer) {
+              try {
+                const testImg = doc.openImage(sigBuffer);
+                doc.image(sigBuffer, sig2X + 10, sigY + 30, { fit: [sigWidth - 20, sigHeight - 20] });
+              } catch (imgError) {
+                console.error('[PDF] Corrupted respondent signature:', verification.respondentSignaturePath, imgError.message);
+                doc.fontSize(9).fillColor('#ef4444').text('Corrupted Image', sig2X + 55, sigY + 60);
+              }
+            } else {
+              doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sig2X + 60, sigY + 60);
+            }
+          } catch (e) {
+            console.error('[PDF] Error adding respondent signature:', e.message);
+            doc.fontSize(9).fillColor('#ef4444').text('Error Loading', sig2X + 55, sigY + 60);
+          }
+        } else {
+          doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sig2X + 60, sigY + 60);
+        }
       }
 
       doc.y = sigY + sigHeight + 40;

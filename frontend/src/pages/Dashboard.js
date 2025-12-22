@@ -113,7 +113,7 @@ const Dashboard = () => {
     setSideNavOpen(false);
   };
 
-  const tabStatusMap = ['all', 'pending', 'vendor_assigned', 'assigned', 'submitted', 'approved', 'insufficient', 'rejected', 'stopped'];
+  const tabStatusMap = ['all', 'pending', 'vendor_assigned', 'candidate_assigned', 'candidate_overdue', 'assigned', 'submitted', 'approved', 'insufficient', 'rejected', 'stopped'];
 
   const renderContent = () => {
     switch (activeSection) {
@@ -159,6 +159,30 @@ const Dashboard = () => {
                       </Typography>
                       <Typography variant="body2" align="center" color="text.secondary">
                         Vendor Assigned
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={6} sm={4} md={2.4}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h5" align="center" color="secondary.main">
+                        {stats.candidateAssignedRecords || 0}
+                      </Typography>
+                      <Typography variant="body2" align="center" color="text.secondary">
+                        Candidate Assigned
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={6} sm={4} md={2.4}>
+                  <Card>
+                    <CardContent>
+                      <Typography variant="h5" align="center" color="error.main">
+                        {stats.candidateOverdueRecords || 0}
+                      </Typography>
+                      <Typography variant="body2" align="center" color="text.secondary">
+                        Candidate Overdue
                       </Typography>
                     </CardContent>
                   </Card>
@@ -259,6 +283,8 @@ const Dashboard = () => {
                 <Tab label="All Cases" />
                 <Tab label="Pending" />
                 <Tab label="Vendor Assigned" />
+                <Tab label="Candidate Assigned" />
+                <Tab label="Candidate Overdue" />
                 <Tab label="Assigned" />
                 <Tab label="Submitted" />
                 <Tab label="Approved" />
@@ -269,7 +295,7 @@ const Dashboard = () => {
             </Paper>
 
             {/* Records Table */}
-            <RecordsTable status={tabStatusMap[activeTab]} />
+            <RecordsTable key={tabStatusMap[activeTab]} status={tabStatusMap[activeTab]} />
           </>
         );
       

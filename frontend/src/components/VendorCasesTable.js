@@ -38,6 +38,7 @@ import axios from 'axios';
 const statusConfig = {
   pending: { color: 'warning', label: 'PENDING' },
   vendor_assigned: { color: 'info', label: 'VENDOR ASSIGNED' },
+  candidate_assigned: { color: 'secondary', label: 'CANDIDATE ASSIGNED' },
   assigned: { color: 'info', label: 'ASSIGNED' },
   submitted: { color: 'secondary', label: 'SUBMITTED' },
   approved: { color: 'success', label: 'APPROVED' },

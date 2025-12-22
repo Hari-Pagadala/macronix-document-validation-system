@@ -2,7 +2,7 @@
 
 ## ✅ STATUS: COMPLETE & OPERATIONAL
 
-**Backend Server:** 🟢 Running on http://0.0.0.0:5000 (192.168.29.228:5000)  
+**Backend Server:** 🟢 Running on http://0.0.0.0:5000 (192.168.1.16:5000)  
 **Database:** 🟢 PostgreSQL Connected  
 **ImageKit:** 🟢 Credentials Configured  
 **Mobile:** 🟢 Service Ready  

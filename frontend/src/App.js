@@ -11,6 +11,7 @@ import VendorLogin from './pages/VendorLogin';
 import VendorDashboard from './pages/VendorDashboard';
 import FieldOfficerLogin from './pages/FieldOfficerLogin';
 import FieldOfficerDashboard from './pages/FieldOfficerDashboard';
+import CandidateSubmissionPage from './pages/CandidateSubmissionPage';
 
 // Context
 import { AuthProvider } from './context/AuthContext';
@@ -45,6 +46,7 @@ function App() {
               <Route path="/login" element={<Login />} />
               <Route path="/vendor/login" element={<VendorLogin />} />
               <Route path="/field-officer/login" element={<FieldOfficerLogin />} />
+              <Route path="/candidate/submit" element={<CandidateSubmissionPage />} />
               <Route 
                 path="/dashboard/*" 
                 element={

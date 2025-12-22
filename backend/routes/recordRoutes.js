@@ -9,6 +9,8 @@ router.post('/bulk-upload', recordController.bulkUpload);
 router.post('/manual', recordController.createManualRecord);
 router.get('/dashboard-stats', recordController.getDashboardStats);
 router.get('/', recordController.getAllRecords);
+router.post('/:id/assign-to-candidate', recordController.assignToCandidate);
+router.post('/:id/resend-candidate-link', recordController.resendCandidateLink);
 router.put('/:id/stop', recordController.stopRecord);
 router.put('/:id/revert', recordController.revertRecord);
 router.put('/:id/approve', recordController.approveRecord);
@@ -16,6 +18,7 @@ router.put('/:id/reject', recordController.rejectRecord);
 router.put('/:id/reinitiate', recordController.reinitiateRecord);
 router.put('/:id/send-back', recordController.sendBackToFieldOfficer);
 router.get('/:id/verification', recordController.getRecordVerification);
+router.get('/:id/candidate-link', recordController.getCandidateLink);
 router.get('/:id', recordController.getRecordById);
 router.put('/:id', recordController.updateRecord);
 

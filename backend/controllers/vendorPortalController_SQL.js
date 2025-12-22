@@ -1,6 +1,8 @@
 const Record = require('../models/Record_SQL');
 const Vendor = require('../models/Vendor_SQL');
 const FieldOfficer = require('../models/FieldOfficer_SQL');
+const { createCandidateToken } = require('../utils/candidateTokenUtils');
+const { sendCandidateNotification } = require('../utils/notificationUtils');
 const { Op } = require('sequelize');
 
 // Get Vendor Dashboard Stats
@@ -323,6 +325,114 @@ exports.updateCaseStatus = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Server error updating case status'
+        });
+    }
+};
+
+// Assign Case to Candidate (Self-Submission)
+exports.assignToCandidate = async (req, res) => {
+    try {
+        const vendorId = req.userId;
+        const { caseId } = req.params;
+        const { candidateName, candidateEmail, candidateMobile, expiryHours = 48 } = req.body;
+
+        console.log('[Assign to Candidate] Request:', { caseId, candidateName, candidateEmail, candidateMobile });
+
+        // Validate required fields
+        if (!candidateName || !candidateEmail || !candidateMobile) {
+            return res.status(400).json({
+                success: false,
+                message: 'Candidate name, email, and mobile number are required'
+            });
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(candidateEmail)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid email format'
+            });
+        }
+
+        // Validate mobile number (10 digits)
+        const mobileRegex = /^[0-9]{10}$/;
+        if (!mobileRegex.test(candidateMobile)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mobile number must be exactly 10 digits'
+            });
+        }
+
+        // Check if case belongs to this vendor
+        const record = await Record.findOne({
+            where: { 
+                id: caseId,
+                assignedVendor: vendorId
+            }
+        });
+
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Case not found or not assigned to you'
+            });
+        }
+
+        // Create candidate token
+        const candidateToken = await createCandidateToken({
+            recordId: record.id,
+            candidateName,
+            candidateEmail,
+            candidateMobile
+        }, expiryHours);
+
+        // Update record status and store candidate info
+        record.status = 'candidate_assigned';
+        record.assignedFieldOfficer = null; // Clear FO assignment
+        record.assignedFieldOfficerName = null;
+        record.candidateName = candidateName;
+        record.candidateEmail = candidateEmail;
+        record.candidateMobile = candidateMobile;
+        record.assignedDate = new Date();
+
+        await record.save();
+
+        // Generate submission link
+        const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const submissionLink = `${baseUrl}/candidate/submit?token=${candidateToken.token}`;
+
+        // Send notification (email + SMS)
+        try {
+            await sendCandidateNotification({
+                candidateName,
+                candidateEmail,
+                candidateMobile,
+                caseNumber: record.caseNumber,
+                referenceNumber: record.referenceNumber,
+                submissionLink,
+                expiresAt: candidateToken.expiresAt
+            });
+            console.log('[Assign to Candidate] Notification sent successfully');
+        } catch (notifError) {
+            console.error('[Assign to Candidate] Notification error:', notifError);
+            // Continue even if notification fails
+        }
+
+        res.json({
+            success: true,
+            message: 'Case assigned to candidate successfully',
+            record: record.toJSON(),
+            submissionLink,
+            expiresAt: candidateToken.expiresAt
+        });
+
+    } catch (error) {
+        console.error('Error assigning to candidate:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error assigning to candidate',
+            error: error.message
         });
     }
 };

@@ -30,16 +30,21 @@ import {
   Pending as PendingIcon,
   Schedule as InProgressIcon,
   Error as RejectedIcon,
-  Warning as WarningIcon
+  Warning as WarningIcon,
+  PersonAdd as PersonAddIcon
 } from '@mui/icons-material';
 import axios from 'axios';
+import config from '../config';
 import EditCaseModal from './EditCaseModal';
 import ViewDetailsModal from './ViewDetailsModal';
+import AssignToCandidateModal from './AssignToCandidateModal';
 import { useAuth } from '../context/AuthContext';
 
 const statusConfig = {
   pending: { color: 'warning', icon: <PendingIcon />, label: 'PENDING' },
   vendor_assigned: { color: 'info', icon: <AssignIcon />, label: 'VENDOR ASSIGNED' },
+  candidate_assigned: { color: 'secondary', icon: <AssignIcon />, label: 'CANDIDATE ASSIGNED' },
+  candidate_overdue: { color: 'error', icon: <WarningIcon />, label: 'CANDIDATE OVERDUE' },
   assigned: { color: 'info', icon: <AssignIcon />, label: 'ASSIGNED' },
   in_progress: { color: 'primary', icon: <InProgressIcon />, label: 'IN PROGRESS' },
   submitted: { color: 'secondary', icon: <PendingIcon />, label: 'SUBMITTED' },
@@ -63,17 +68,19 @@ const RecordsTable = ({ status = 'all' }) => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [viewModalOpen, setViewModalOpen] = useState(false);
   const [viewRecordId, setViewRecordId] = useState(null);
+  const [candidateModalOpen, setCandidateModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (token && !authLoading) {
       fetchRecords();
     }
-  }, [status, page, rowsPerPage, search, token, authLoading]);
+  }, [status, page, rowsPerPage, search, token, authLoading, refreshKey]);
 
   const fetchRecords = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://localhost:5000/api/records', {
+      const response = await axios.get(`${config}/records`, {
         params: {
           status: status === 'all' ? '' : status,
           search: search,
@@ -134,6 +141,46 @@ const RecordsTable = ({ status = 'all' }) => {
     handleMenuClose();
   };
 
+  const handleAssignToCandidate = () => {
+    setCandidateModalOpen(true);
+    setAnchorEl(null);
+  };
+
+  const handleCandidateModalClose = () => {
+    setCandidateModalOpen(false);
+    setSelectedRecord(null);
+  };
+
+  const handleCandidateAssigned = () => {
+    setRefreshKey(prev => prev + 1);
+  };
+
+  const handleResendCandidateLink = async () => {
+    if (!selectedRecord) return;
+
+    try {
+      const response = await axios.post(
+        `${config}/records/${selectedRecord.id}/resend-candidate-link`,
+        { expiryHours: 48 },
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        }
+      );
+
+      if (response.data.success) {
+        alert(`New link generated and sent to ${response.data.candidateInfo.name}\n\nLink: ${response.data.submissionLink}\n\nExpires at: ${new Date(response.data.expiresAt).toLocaleString()}`);
+        setRefreshKey(prev => prev + 1);
+      }
+    } catch (error) {
+      console.error('Error resending candidate link:', error);
+      alert(error.response?.data?.message || 'Failed to resend candidate link');
+    } finally {
+      handleMenuClose();
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     return new Date(dateString).toLocaleDateString('en-IN');
@@ -165,8 +212,9 @@ const RecordsTable = ({ status = 'all' }) => {
   };
 
   const handleUpdateSuccess = () => {
-    fetchRecords();
+    setRefreshKey(prev => prev + 1);
     setEditModalOpen(false);
+    setSelectedRecord(null);
   };
 
 
@@ -368,6 +416,20 @@ const RecordsTable = ({ status = 'all' }) => {
           <EditIcon fontSize="small" sx={{ mr: 1 }} />
           Edit / Assign
         </MenuItem>
+        <MenuItem 
+          onClick={handleAssignToCandidate}
+          disabled={selectedRecord?.status !== 'pending'}
+        >
+          <PersonAddIcon fontSize="small" sx={{ mr: 1 }} />
+          Assign to Candidate
+        </MenuItem>
+        <MenuItem 
+          onClick={handleResendCandidateLink}
+          disabled={!selectedRecord?.candidateTokenExpired}
+        >
+          <PersonAddIcon fontSize="small" sx={{ mr: 1 }} />
+          Resend Link
+        </MenuItem>
       </Menu>
 
       {/* View Details Modal */}
@@ -390,6 +452,14 @@ const RecordsTable = ({ status = 'all' }) => {
           onUpdate={handleUpdateSuccess}
         />
       )}
+
+      {/* Assign to Candidate Modal */}
+      <AssignToCandidateModal
+        open={candidateModalOpen}
+        onClose={handleCandidateModalClose}
+        caseData={selectedRecord}
+        onSuccess={handleCandidateAssigned}
+      />
     </>
   );
 };

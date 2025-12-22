@@ -53,6 +53,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
   const [showSendBackConfirm, setShowSendBackConfirm] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [downloading, setDownloading] = useState(false);
+  const [candidateLink, setCandidateLink] = useState(null);
   // Image preview (lightbox)
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSrc, setPreviewSrc] = useState('');
@@ -67,6 +68,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
     if (open && recordId) {
       fetchRecordDetails();
       fetchVerification();
+      fetchCandidateLink();
     }
   }, [open, recordId]);
 
@@ -93,10 +95,27 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
       const response = await axios.get(`http://localhost:5000/api/records/${recordId}/verification`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('[ViewDetails] Verification data:', response.data.verification);
+      console.log('[ViewDetails] Photos:', response.data.verification?.photos);
+      console.log('[ViewDetails] Documents:', response.data.verification?.documents);
       setVerification(response.data.verification);
     } catch (err) {
       // 404 means no verification yet; ignore
       setVerification(null);
+    }
+  };
+
+  const fetchCandidateLink = async () => {
+    try {
+      const response = await axios.get(`http://localhost:5000/api/records/${recordId}/candidate-link`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data.success && response.data.link) {
+        setCandidateLink(response.data.link);
+      }
+    } catch (err) {
+      // No link available
+      setCandidateLink(null);
     }
   };
 
@@ -497,105 +516,232 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
               )}
             </Paper>
 
+            {/* Candidate Submission Link */}
+            {candidateLink && record.status === 'candidate_assigned' && (
+              <Paper sx={{ p: 2, mb: 3, background: '#fff3cd', border: '1px solid #ffc107' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: '#856404' }}>
+                  🔗 Candidate Submission Link
+                </Typography>
+                <Box sx={{ p: 2, background: '#fff', borderRadius: 1, mb: 2 }}>
+                  <Typography variant="body2" sx={{ wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                    {candidateLink}
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    navigator.clipboard.writeText(candidateLink);
+                    alert('Link copied to clipboard!');
+                  }}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Copy Link
+                </Button>
+              </Paper>
+            )}
+
             {/* Verification Details */}
             {verification && (
               <Paper sx={{ p: 2, mb: 3, background: '#fff' }}>
                 <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 2, color: '#667eea' }}>
                   ✅ Verification Submission
                 </Typography>
-                <DetailRow label="Respondent Name" value={verification.respondentName} />
-                <DetailRow label="Relationship" value={verification.respondentRelationship} />
-                <DetailRow label="Respondent Contact" value={verification.respondentContact} />
-                <DetailRow label="Period of Stay" value={verification.periodOfStay} />
-                <DetailRow label="Ownership Type" value={verification.ownershipType} />
-                <DetailRow label="Verification Date" value={formatDate(verification.verificationDate)} />
-                <DetailRow label="Comments" value={verification.comments} />
-                <DetailRow label="GPS" value={`${verification.gpsLat}, ${verification.gpsLng}`} />
-                <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
-                    Documents
-                  </Typography>
-                  {(verification.documents || []).length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">None</Typography>
-                  ) : (
-                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
-                      {(verification.documents || []).map((file) => {
-                        const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
-                        return (
-                          <Box key={file} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
-                            <Box component="img" src={displayUrl} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openPreview(displayUrl, 'Document') } />
-                          </Box>
-                        );
-                      })}
+                
+                {/* Check if candidate submission (fieldOfficerId is null) */}
+                {!verification.fieldOfficerId ? (
+                  /* Candidate Submission Fields */
+                  <>
+                    <DetailRow label="Submitted By" value={verification.verifiedBy || `${record?.firstName || ''} ${record?.lastName || ''}`.trim() || 'Self'} />
+                    <DetailRow label="Ownership Type" value={verification.ownershipType} />
+                    {verification.ownerName && <DetailRow label="Owner Name" value={verification.ownerName} />}
+                    {verification.relationWithOwner && <DetailRow label="Relation with Owner" value={verification.relationWithOwner} />}
+                    <DetailRow label="Period of Stay" value={verification.periodOfStay} />
+                    <DetailRow label="GPS" value={`${verification.gpsLat}, ${verification.gpsLng}`} />
+                    <DetailRow label="Verification Notes" value={verification.verificationNotes} />
+                  </>
+                ) : (
+                  /* Field Officer Submission Fields */
+                  <>
+                    <DetailRow label="Respondent Name" value={verification.respondentName} />
+                    <DetailRow label="Relationship" value={verification.respondentRelationship} />
+                    <DetailRow label="Respondent Contact" value={verification.respondentContact} />
+                    <DetailRow label="Period of Stay" value={verification.periodOfStay} />
+                    <DetailRow label="Ownership Type" value={verification.ownershipType} />
+                    <DetailRow label="Verification Date" value={formatDate(verification.verificationDate)} />
+                    <DetailRow label="Comments" value={verification.comments} />
+                    <DetailRow label="GPS" value={`${verification.gpsLat}, ${verification.gpsLng}`} />
+                  </>
+                )}
+                
+                {/* Images Section - Different layout for candidate vs FO submissions */}
+                {!verification.fieldOfficerId ? (
+                  /* Candidate Submission Images */
+                  <>
+                    <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
+                        Candidate Selfie
+                      </Typography>
+                      {verification.candidateWithRespondentPath ? (
+                        (() => {
+                          const displayUrl = isImageKitUrl(verification.candidateWithRespondentPath) ? verification.candidateWithRespondentPath : `${UPLOADS_BASE_URL}/${verification.candidateWithRespondentPath}`;
+                          return (
+                            <Box sx={{ width: '100%', maxWidth: 300 }}>
+                              <Box component="img" src={displayUrl} alt="Candidate Selfie" sx={{ width: '100%', height: 180, objectFit: 'cover', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'Candidate Selfie')} />
+                            </Box>
+                          );
+                        })()
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Not provided</Typography>
+                      )}
                     </Box>
-                  )}
-                </Box>
-                <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
-                    Photos
-                  </Typography>
-                  {(verification.photos || []).length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">None</Typography>
-                  ) : (
-                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
-                      {(verification.photos || []).map((file) => {
-                        const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
-                        return (
-                          <Box key={file} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
-                            <Box component="img" src={displayUrl} alt={file} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openPreview(displayUrl, 'Photo')} />
-                          </Box>
-                        );
-                      })}
+                    <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
+                        Candidate House Photo
+                      </Typography>
+                      {(verification.photos || []).length > 0 ? (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
+                          {(verification.photos || []).map((file, index) => {
+                            const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
+                            return (
+                              <Box key={index} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
+                                <Box component="img" src={displayUrl} alt="House Photo" sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openPreview(displayUrl, 'House Photo')} />
+                              </Box>
+                            );
+                          })}
+                        </Box>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Not provided</Typography>
+                      )}
                     </Box>
-                  )}
-                </Box>
-                <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
-                    Selfie Photo with House
-                  </Typography>
-                  {verification.selfieWithHousePath ? (
-                    (() => {
-                      const displayUrl = isImageKitUrl(verification.selfieWithHousePath) ? verification.selfieWithHousePath : `${UPLOADS_BASE_URL}/${verification.selfieWithHousePath}`;
-                      return (
-                        <Box sx={{ width: '100%', maxWidth: 300 }}>
-                          <Box component="img" src={displayUrl} alt="Selfie with House" sx={{ width: '100%', height: 180, objectFit: 'cover', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'Selfie with House')} />
+                    <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
+                        Candidate Selfie with House
+                      </Typography>
+                      {verification.selfieWithHousePath ? (
+                        (() => {
+                          const displayUrl = isImageKitUrl(verification.selfieWithHousePath) ? verification.selfieWithHousePath : `${UPLOADS_BASE_URL}/${verification.selfieWithHousePath}`;
+                          return (
+                            <Box sx={{ width: '100%', maxWidth: 300 }}>
+                              <Box component="img" src={displayUrl} alt="Selfie with House" sx={{ width: '100%', height: 180, objectFit: 'cover', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'Selfie with House')} />
+                            </Box>
+                          );
+                        })()
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Not provided</Typography>
+                      )}
+                    </Box>
+                    {(verification.documents || []).length > 0 && (
+                      <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
+                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
+                          Additional Documents
+                        </Typography>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
+                          {(verification.documents || []).map((file, index) => {
+                            const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
+                            return (
+                              <Box key={index} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
+                                <Box component="img" src={displayUrl} alt={`Document ${index + 1}`} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openPreview(displayUrl, `Document ${index + 1}`)} />
+                              </Box>
+                            );
+                          })}
                         </Box>
-                      );
-                    })()
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">Not provided</Typography>
-                  )}
-                </Box>
-                <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
-                    Candidate with Respondent Photo
-                  </Typography>
-                  {verification.candidateWithRespondentPath ? (
-                    (() => {
-                      const displayUrl = isImageKitUrl(verification.candidateWithRespondentPath) ? verification.candidateWithRespondentPath : `${UPLOADS_BASE_URL}/${verification.candidateWithRespondentPath}`;
-                      return (
-                        <Box sx={{ width: '100%', maxWidth: 300 }}>
-                          <Box component="img" src={displayUrl} alt="Candidate with Respondent" sx={{ width: '100%', height: 180, objectFit: 'cover', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'Candidate with Respondent')} />
+                      </Box>
+                    )}
+                  </>
+                ) : (
+                  /* Field Officer Submission Images */
+                  <>
+                    <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
+                        Documents
+                      </Typography>
+                      {(verification.documents || []).length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">None</Typography>
+                      ) : (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
+                          {(verification.documents || []).map((file, index) => {
+                            const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
+                            return (
+                              <Box key={index} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
+                                <Box component="img" src={displayUrl} alt={`Document ${index + 1}`} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openPreview(displayUrl, `Document ${index + 1}`)} />
+                              </Box>
+                            );
+                          })}
                         </Box>
-                      );
-                    })()
-                  ) : (
-                    <Typography variant="body2" color="text.secondary">Not provided</Typography>
-                  )}
-                </Box>
+                      )}
+                    </Box>
+                    <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
+                        Photos
+                      </Typography>
+                      {(verification.photos || []).length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">None</Typography>
+                      ) : (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
+                          {(verification.photos || []).map((file, index) => {
+                            const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
+                            return (
+                              <Box key={index} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
+                                <Box component="img" src={displayUrl} alt={`Photo ${index + 1}`} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openPreview(displayUrl, `Photo ${index + 1}`)} />
+                              </Box>
+                            );
+                          })}
+                        </Box>
+                      )}
+                    </Box>
+                    <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
+                        Selfie Photo with House
+                      </Typography>
+                      {verification.selfieWithHousePath ? (
+                        (() => {
+                          const displayUrl = isImageKitUrl(verification.selfieWithHousePath) ? verification.selfieWithHousePath : `${UPLOADS_BASE_URL}/${verification.selfieWithHousePath}`;
+                          return (
+                            <Box sx={{ width: '100%', maxWidth: 300 }}>
+                              <Box component="img" src={displayUrl} alt="Selfie with House" sx={{ width: '100%', height: 180, objectFit: 'cover', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'Selfie with House')} />
+                            </Box>
+                          );
+                        })()
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Not provided</Typography>
+                      )}
+                    </Box>
+                    <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
+                        Candidate with Respondent Photo
+                      </Typography>
+                      {verification.candidateWithRespondentPath ? (
+                        (() => {
+                          const displayUrl = isImageKitUrl(verification.candidateWithRespondentPath) ? verification.candidateWithRespondentPath : `${UPLOADS_BASE_URL}/${verification.candidateWithRespondentPath}`;
+                          return (
+                            <Box sx={{ width: '100%', maxWidth: 300 }}>
+                              <Box component="img" src={displayUrl} alt="Candidate with Respondent" sx={{ width: '100%', height: 180, objectFit: 'cover', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'Candidate with Respondent')} />
+                            </Box>
+                          );
+                        })()
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Not provided</Typography>
+                      )}
+                    </Box>
+                  </>
+                )}
+                
                 <Box sx={{ py: 1.5 }}>
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
                     Signatures
                   </Typography>
                   <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">Field Officer</Typography>
+                    <Grid item xs={!verification.fieldOfficerId ? 12 : 6}>
+                      <Typography variant="caption" color="text.secondary">
+                        {!verification.fieldOfficerId ? 'Candidate' : 'Field Officer'}
+                      </Typography>
                       {verification.officerSignaturePath ? (
                         (() => {
                           const displayUrl = isImageKitUrl(verification.officerSignaturePath) ? verification.officerSignaturePath : `${UPLOADS_BASE_URL}/${verification.officerSignaturePath}`;
                           return (
                             <Box sx={{ width: '100%', maxWidth: 300 }}>
-                              <Box component="img" src={displayUrl} alt="Officer Signature" sx={{ width: '100%', height: 160, objectFit: 'contain', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1, backgroundColor: '#fafafa' }} onClick={() => openPreview(displayUrl, 'Officer Signature')} />
+                              <Box component="img" src={displayUrl} alt={!verification.fieldOfficerId ? 'Candidate Signature' : 'Officer Signature'} sx={{ width: '100%', height: 160, objectFit: 'contain', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1, backgroundColor: '#fafafa' }} onClick={() => openPreview(displayUrl, !verification.fieldOfficerId ? 'Candidate Signature' : 'Officer Signature')} />
                             </Box>
                           );
                         })()
@@ -603,21 +749,23 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                         <Typography variant="body2" color="text.secondary">None</Typography>
                       )}
                     </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="caption" color="text.secondary">Respondent</Typography>
-                      {verification.respondentSignaturePath ? (
-                        (() => {
-                          const displayUrl = isImageKitUrl(verification.respondentSignaturePath) ? verification.respondentSignaturePath : `${UPLOADS_BASE_URL}/${verification.respondentSignaturePath}`;
-                          return (
-                            <Box sx={{ width: '100%', maxWidth: 300 }}>
-                              <Box component="img" src={displayUrl} alt="Respondent Signature" sx={{ width: '100%', height: 160, objectFit: 'contain', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1, backgroundColor: '#fafafa' }} onClick={() => openPreview(displayUrl, 'Respondent Signature')} />
-                            </Box>
-                          );
-                        })()
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">None</Typography>
-                      )}
-                    </Grid>
+                    {verification.fieldOfficerId && (
+                      <Grid item xs={6}>
+                        <Typography variant="caption" color="text.secondary">Respondent</Typography>
+                        {verification.respondentSignaturePath ? (
+                          (() => {
+                            const displayUrl = isImageKitUrl(verification.respondentSignaturePath) ? verification.respondentSignaturePath : `${UPLOADS_BASE_URL}/${verification.respondentSignaturePath}`;
+                            return (
+                              <Box sx={{ width: '100%', maxWidth: 300 }}>
+                                <Box component="img" src={displayUrl} alt="Respondent Signature" sx={{ width: '100%', height: 160, objectFit: 'contain', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1, backgroundColor: '#fafafa' }} onClick={() => openPreview(displayUrl, 'Respondent Signature')} />
+                              </Box>
+                            );
+                          })()
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">None</Typography>
+                        )}
+                      </Grid>
+                    )}
                   </Grid>
                 </Box>
               </Paper>

@@ -3,6 +3,8 @@ const Counter = require('../models/Counter_SQL');
 const Vendor = require('../models/Vendor_SQL');
 const FieldOfficer = require('../models/FieldOfficer_SQL');
 const Verification = require('../models/Verification_SQL');
+const { createCandidateToken } = require('../utils/candidateTokenUtils');
+const { sendCandidateNotification } = require('../utils/notificationUtils');
 const { Op } = require('sequelize');
 
 // Generate reference number
@@ -295,7 +297,12 @@ exports.getAllRecords = async (req, res) => {
         
         const where = {};
         if (status && status !== '') {
-            where.status = status;
+            // For candidate_overdue, we look for candidate_assigned records with expired tokens
+            if (status === 'candidate_overdue') {
+                where.status = 'candidate_assigned';
+            } else {
+                where.status = status;
+            }
         }
         if (search) {
             const term = `%${search}%`;
@@ -315,7 +322,7 @@ exports.getAllRecords = async (req, res) => {
         });
         
         // Fetch vendor and field officer details for each record
-        const recordsWithDetails = await Promise.all(rows.map(async (record) => {
+        let recordsWithDetails = await Promise.all(rows.map(async (record) => {
             const recordData = record.toJSON();
             
             if (record.assignedVendor) {
@@ -333,17 +340,32 @@ exports.getAllRecords = async (req, res) => {
                 }
             }
             
+            // Check if candidate token is expired
+            if (record.status === 'candidate_assigned') {
+                const CandidateToken = require('../models/CandidateToken_SQL');
+                const token = await CandidateToken.findOne({
+                    where: { recordId: record.id, isUsed: false },
+                    order: [['createdAt', 'DESC']]
+                });
+                recordData.candidateTokenExpired = token && new Date() > new Date(token.expiresAt);
+            }
+            
             return recordData;
         }));
+        
+        // Filter for candidate_overdue if requested
+        if (status === 'candidate_overdue') {
+            recordsWithDetails = recordsWithDetails.filter(r => r.candidateTokenExpired);
+        }
         
         res.json({
             success: true,
             records: recordsWithDetails,
             pagination: {
-                total: count,
+                total: status === 'candidate_overdue' ? recordsWithDetails.length : count,
                 page: parseInt(page),
                 limit: parseInt(limit),
-                pages: Math.ceil(count / limit)
+                pages: Math.ceil((status === 'candidate_overdue' ? recordsWithDetails.length : count) / limit)
             }
         });
     } catch (error) {
@@ -430,6 +452,13 @@ exports.updateRecord = async (req, res) => {
         
         // Remove fields that shouldn't be updated directly
         const { createdAt, updatedAt, referenceNumber, ...safeUpdateData } = updateData;
+        
+        // Update fullName if firstName or lastName is being updated
+        if (safeUpdateData.firstName || safeUpdateData.lastName) {
+            const firstName = safeUpdateData.firstName || record.firstName || '';
+            const lastName = safeUpdateData.lastName || record.lastName || '';
+            safeUpdateData.fullName = `${firstName} ${lastName}`.trim();
+        }
         
         // Convert empty strings to null for UUID fields
         if (safeUpdateData.assignedVendor === '' || safeUpdateData.assignedVendor === null) {
@@ -532,6 +561,7 @@ exports.getDashboardStats = async (req, res) => {
         const totalRecords = await Record.count();
         const pendingRecords = await Record.count({ where: { status: 'pending' } });
         const vendorAssignedRecords = await Record.count({ where: { status: 'vendor_assigned' } });
+        const candidateAssignedRecords = await Record.count({ where: { status: 'candidate_assigned' } });
         const assignedRecords = await Record.count({ where: { status: 'assigned' } });
         const submittedRecords = await Record.count({ where: { status: 'submitted' } });
         const approvedRecords = await Record.count({ where: { status: 'approved' } });
@@ -539,10 +569,32 @@ exports.getDashboardStats = async (req, res) => {
         const rejectedRecords = await Record.count({ where: { status: 'rejected' } });
         const stoppedRecords = await Record.count({ where: { status: 'stopped' } });
         
+        // Count expired candidate assignments
+        const candidateAssignedRecordsList = await Record.findAll({ 
+            where: { status: 'candidate_assigned' },
+            attributes: ['id']
+        });
+        
+        const CandidateToken = require('../models/CandidateToken_SQL');
+        let candidateOverdueRecords = 0;
+        
+        for (const record of candidateAssignedRecordsList) {
+            const token = await CandidateToken.findOne({
+                where: { recordId: record.id, isUsed: false },
+                order: [['createdAt', 'DESC']]
+            });
+            
+            if (token && new Date() > new Date(token.expiresAt)) {
+                candidateOverdueRecords++;
+            }
+        }
+        
         console.log('Dashboard Stats:', {
             totalRecords,
             pendingRecords,
             vendorAssignedRecords,
+            candidateAssignedRecords,
+            candidateOverdueRecords,
             assignedRecords,
             submittedRecords,
             approvedRecords,
@@ -557,6 +609,8 @@ exports.getDashboardStats = async (req, res) => {
                 totalRecords,
                 pendingRecords,
                 vendorAssignedRecords,
+                candidateAssignedRecords,
+                candidateOverdueRecords,
                 assignedRecords,
                 submittedRecords,
                 approvedRecords,
@@ -835,6 +889,276 @@ exports.sendBackToFieldOfficer = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error sending case back: ' + error.message
+        });
+    }
+};
+
+// Assign case to candidate (Admin only)
+exports.assignToCandidate = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { candidateName, candidateEmail, candidateMobile, expiryHours = 48 } = req.body;
+
+        console.log('[Admin - Assign to Candidate] Request:', { id, candidateName, candidateEmail, candidateMobile });
+
+        // Validate required fields
+        if (!candidateName || !candidateEmail || !candidateMobile) {
+            return res.status(400).json({
+                success: false,
+                message: 'Candidate name, email, and mobile number are required'
+            });
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(candidateEmail)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid email format'
+            });
+        }
+
+        // Validate mobile number (10 digits)
+        const mobileRegex = /^[0-9]{10}$/;
+        if (!mobileRegex.test(candidateMobile)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mobile number must be exactly 10 digits'
+            });
+        }
+
+        // Find the case (admin can access any case)
+        const record = await Record.findByPk(id);
+
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Case not found'
+            });
+        }
+
+        // Check if case is in a valid status for assignment
+        if (['submitted', 'approved', 'rejected', 'stopped'].includes(record.status)) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot assign case with status: ${record.status}`
+            });
+        }
+
+        // Create candidate token
+        const candidateToken = await createCandidateToken({
+            recordId: record.id,
+            candidateName,
+            candidateEmail,
+            candidateMobile
+        }, expiryHours);
+
+        // Update record status and store candidate info
+        record.status = 'candidate_assigned';
+        record.assignedFieldOfficer = null; // Clear FO assignment
+        record.assignedFieldOfficerName = null;
+        record.candidateName = candidateName;
+        record.candidateEmail = candidateEmail;
+        record.candidateMobile = candidateMobile;
+        record.assignedDate = new Date();
+
+        await record.save();
+
+        // Generate submission link
+        const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const submissionLink = `${baseUrl}/candidate/submit?token=${candidateToken.token}`;
+
+        // Send notification (email + SMS)
+        try {
+            await sendCandidateNotification({
+                candidateName,
+                candidateEmail,
+                candidateMobile,
+                caseNumber: record.caseNumber,
+                referenceNumber: record.referenceNumber,
+                submissionLink,
+                expiresAt: candidateToken.expiresAt
+            });
+            console.log('[Admin - Assign to Candidate] Notification sent successfully');
+        } catch (notifError) {
+            console.error('[Admin - Assign to Candidate] Notification error:', notifError);
+            // Continue even if notification fails
+        }
+
+        res.json({
+            success: true,
+            message: 'Case assigned to candidate successfully',
+            record: record.toJSON(),
+            submissionLink,
+            expiresAt: candidateToken.expiresAt
+        });
+
+    } catch (error) {
+        console.error('Error assigning to candidate:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error assigning to candidate',
+            error: error.message
+        });
+    }
+};
+
+// Get candidate submission link for a record
+exports.getCandidateLink = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const record = await Record.findByPk(id);
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Record not found'
+            });
+        }
+
+        // Only show link if status is candidate_assigned
+        if (record.status !== 'candidate_assigned') {
+            return res.json({
+                success: true,
+                link: null,
+                message: 'No active candidate link for this record'
+            });
+        }
+
+        // Find the active token for this record
+        const CandidateToken = require('../models/CandidateToken_SQL');
+        const token = await CandidateToken.findOne({
+            where: {
+                recordId: id,
+                isUsed: false
+            },
+            order: [['createdAt', 'DESC']]
+        });
+
+        if (!token) {
+            return res.json({
+                success: true,
+                link: null,
+                message: 'No active token found'
+            });
+        }
+
+        // Check if token is expired
+        if (new Date() > new Date(token.expiresAt)) {
+            return res.json({
+                success: true,
+                link: null,
+                message: 'Token has expired'
+            });
+        }
+
+        const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const submissionLink = `${baseUrl}/candidate/submit?token=${token.token}`;
+
+        res.json({
+            success: true,
+            link: submissionLink,
+            expiresAt: token.expiresAt
+        });
+
+    } catch (error) {
+        console.error('Error fetching candidate link:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error fetching candidate link',
+            error: error.message
+        });
+    }
+};
+
+// Resend/regenerate candidate link for expired assignments
+exports.resendCandidateLink = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { expiryHours = 48 } = req.body;
+
+        console.log('[Admin - Resend Candidate Link] Request:', { id, expiryHours });
+
+        // Find the case (admin can access any case)
+        const record = await Record.findByPk(id);
+
+        if (!record) {
+            return res.status(404).json({
+                success: false,
+                message: 'Case not found'
+            });
+        }
+
+        // Check if case is in candidate_assigned status
+        if (record.status !== 'candidate_assigned') {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot resend link for case with status: ${record.status}`
+            });
+        }
+
+        // Check if we have candidate info stored
+        if (!record.candidateName || !record.candidateEmail || !record.candidateMobile) {
+            return res.status(400).json({
+                success: false,
+                message: 'Candidate information not found in record. Please reassign to candidate.'
+            });
+        }
+
+        // Mark old tokens as used
+        const CandidateToken = require('../models/CandidateToken_SQL');
+        await CandidateToken.update(
+            { isUsed: true },
+            { where: { recordId: record.id, isUsed: false } }
+        );
+
+        // Create new candidate token
+        const candidateToken = await createCandidateToken({
+            recordId: record.id,
+            candidateName: record.candidateName,
+            candidateEmail: record.candidateEmail,
+            candidateMobile: record.candidateMobile
+        }, expiryHours);
+
+        // Generate submission link
+        const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const submissionLink = `${baseUrl}/candidate/submit?token=${candidateToken.token}`;
+
+        // Send notification (email + SMS)
+        try {
+            await sendCandidateNotification({
+                candidateName: record.candidateName,
+                candidateEmail: record.candidateEmail,
+                candidateMobile: record.candidateMobile,
+                caseNumber: record.caseNumber,
+                referenceNumber: record.referenceNumber,
+                submissionLink,
+                expiresAt: candidateToken.expiresAt
+            });
+            console.log('[Admin - Resend Candidate Link] Notification sent successfully');
+        } catch (notifError) {
+            console.error('[Admin - Resend Candidate Link] Notification error:', notifError);
+            // Continue even if notification fails
+        }
+
+        res.json({
+            success: true,
+            message: 'New candidate link generated and sent successfully',
+            submissionLink,
+            expiresAt: candidateToken.expiresAt,
+            candidateInfo: {
+                name: record.candidateName,
+                email: record.candidateEmail,
+                mobile: record.candidateMobile
+            }
+        });
+
+    } catch (error) {
+        console.error('Error resending candidate link:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error resending candidate link',
+            error: error.message
         });
     }
 };

@@ -19,6 +19,8 @@ router.get('/dashboard/stats', vendorAuth, vendorPortalController.getVendorDashb
 // Cases
 router.get('/cases', vendorAuth, vendorPortalController.getVendorCases);
 router.post('/cases/:caseId/assign-field-officer', vendorAuth, vendorPortalController.assignFieldOfficer);
+// REMOVED: Candidate assignment now restricted to Super Admin only via /api/records/:id/assign-to-candidate
+// router.post('/cases/:caseId/assign-to-candidate', vendorAuth, vendorPortalController.assignToCandidate);
 router.put('/cases/:caseId/status', vendorAuth, vendorPortalController.updateCaseStatus);
 router.get('/cases/:id', vendorAuth, vendorPortalController.getVendorCase);
 

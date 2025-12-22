@@ -22,7 +22,7 @@ New-NetFirewallRule `
 
 Write-Host "✓ Firewall rule created successfully!" -ForegroundColor Green
 Write-Host ""
-Write-Host "Your backend server at http://192.168.29.228:5000 is now accessible from mobile devices." -ForegroundColor Green
+Write-Host "Your backend server at http://192.168.1.16:5000 is now accessible from mobile devices." -ForegroundColor Green
 Write-Host ""
 Write-Host "Press any key to exit..."
 $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
