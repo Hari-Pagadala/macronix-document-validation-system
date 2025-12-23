@@ -1,27 +1,50 @@
 /**
  * Notification utility for sending emails and SMS to candidates
- * Integrated with Nodemailer (SMTP) and Twilio (SMS)
+ * Integrated with Nodemailer (SMTP) and Fast2SMS (SMS)
  */
 
 const nodemailer = require('nodemailer');
+const axios = require('axios');
 
-// Initialize email transporter (SMTP)
-let emailTransporter = null;
+// Initialize email transporters (with Gmail 465 fallback to avoid 587 blocks)
+let emailTransporters = [];
 try {
   if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-    emailTransporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
-      port: parseInt(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === 'true', // true for 465, false for other ports
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS
-      },
-      tls: {
-        rejectUnauthorized: false // Allow self-signed certificates
+    const smtpHost = process.env.SMTP_HOST;
+    const primaryPort = parseInt(process.env.SMTP_PORT) || 587;
+    const primarySecure = process.env.SMTP_SECURE === 'true';
+
+    const transportConfigs = [
+      {
+        host: smtpHost,
+        port: primaryPort,
+        secure: primarySecure,
       }
+    ];
+
+    // Gmail often works better on 465 when 587 is blocked
+    const isGmail = smtpHost.includes('gmail.com');
+    if (isGmail && !(primaryPort === 465 && primarySecure === true)) {
+      transportConfigs.push({ host: smtpHost, port: 465, secure: true });
+    }
+
+    // Build transporters with shared auth and sensible timeouts
+    emailTransporters = transportConfigs.map((cfg) => {
+      const transporter = nodemailer.createTransport({
+        ...cfg,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS
+        },
+        tls: {
+          rejectUnauthorized: false
+        },
+        connectionTimeout: 10000,
+        socketTimeout: 10000,
+      });
+      console.log(`✅ Email transporter initialized (${cfg.host}:${cfg.port}, secure=${cfg.secure})`);
+      return { transporter, cfg };
     });
-    console.log('✅ Email transporter initialized');
   } else {
     console.warn('⚠️ Email service not configured - set SMTP environment variables');
   }
@@ -29,15 +52,14 @@ try {
   console.error('❌ Email transporter initialization failed:', error.message);
 }
 
-// Initialize SMS client (Twilio)
-let smsClient = null;
+// Initialize SMS client (Fast2SMS)
+let smsConfigured = false;
 try {
-  if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
-    const twilio = require('twilio');
-    smsClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-    console.log('✅ SMS client initialized');
+  if (process.env.FAST2SMS_API_KEY) {
+    smsConfigured = true;
+    console.log('✅ SMS client initialized (Fast2SMS)');
   } else {
-    console.warn('⚠️ SMS service not configured - set TWILIO environment variables');
+    console.warn('⚠️ SMS service not configured - set FAST2SMS_API_KEY environment variable');
   }
 } catch (error) {
   console.error('❌ SMS client initialization failed:', error.message);
@@ -48,29 +70,39 @@ try {
  * @private
  */
 const sendEmail = async (candidateEmail, subject, body) => {
-  if (!emailTransporter) {
+  if (!emailTransporters.length) {
     console.warn('[Email] Service not configured - skipping email');
     return { sent: false, error: 'Email service not configured' };
   }
 
   try {
-    const info = await emailTransporter.sendMail({
-      from: process.env.EMAIL_FROM || process.env.SMTP_USER,
-      to: candidateEmail,
-      subject: subject,
-      text: body,
-      html: body.replace(/\n/g, '<br>')
-    });
+    let lastError = null;
 
-    console.log('[Email] ✅ Sent successfully to:', candidateEmail);
-    console.log('[Email] Message ID:', info.messageId);
-    
-    return {
-      sent: true,
-      recipient: candidateEmail,
-      messageId: info.messageId,
-      timestamp: new Date()
-    };
+    for (const { transporter, cfg } of emailTransporters) {
+      try {
+        const info = await transporter.sendMail({
+          from: process.env.EMAIL_FROM || process.env.SMTP_USER,
+          to: candidateEmail,
+          subject: subject,
+          text: body,
+          html: body.replace(/\n/g, '<br>')
+        });
+
+        console.log('[Email] ✅ Sent successfully to:', candidateEmail, `via ${cfg.host}:${cfg.port}`);
+        return {
+          sent: true,
+          recipient: candidateEmail,
+          messageId: info.messageId,
+          timestamp: new Date(),
+          transport: `${cfg.host}:${cfg.port}`
+        };
+      } catch (err) {
+        lastError = err;
+        console.warn('[Email] Transport failed, trying fallback:', `${cfg.host}:${cfg.port}`, err.message);
+      }
+    }
+
+    throw lastError || new Error('No email transporter succeeded');
   } catch (error) {
     console.error('[Email] ❌ Failed to send:', error.message);
     return {
@@ -83,56 +115,63 @@ const sendEmail = async (candidateEmail, subject, body) => {
 };
 
 /**
- * Send SMS notification
+ * Send SMS notification using Fast2SMS
  * @private
  */
 const sendSMS = async (candidateMobile, message) => {
-  if (!smsClient) {
+  if (!smsConfigured || !process.env.FAST2SMS_API_KEY) {
     console.warn('[SMS] Service not configured - skipping SMS');
     return { sent: false, error: 'SMS service not configured' };
   }
 
   try {
-    // Format phone number for Twilio (add +91 country code for India)
-    const formattedPhone = candidateMobile.startsWith('+') 
-      ? candidateMobile 
-      : `+91${candidateMobile}`;
+    // Format phone number (remove +91 if present, Fast2SMS expects 10 digit number)
+    const formattedPhone = candidateMobile.replace(/^\+91/, '').replace(/[^0-9]/g, '');
 
-    const smsFrom = process.env.TWILIO_SENDER_ID || process.env.TWILIO_PHONE_NUMBER;
-    const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID;
-
-    if (!messagingServiceSid && !smsFrom) {
-      throw new Error('Twilio configuration missing: set TWILIO_SENDER_ID or TWILIO_PHONE_NUMBER or TWILIO_MESSAGING_SERVICE_SID');
+    if (formattedPhone.length !== 10) {
+      throw new Error('Invalid mobile number format. Expected 10 digits.');
     }
 
-    const payload = {
-      body: message,
-      to: formattedPhone
-    };
+    const senderId = process.env.FAST2SMS_SENDER_ID || 'MACRNX';
 
-    if (messagingServiceSid) {
-      payload.messagingServiceSid = messagingServiceSid;
+    // Fast2SMS API request
+    const response = await axios.post(
+      'https://www.fast2sms.com/dev/bulkV2',
+      {
+        route: 'q',
+        message: message,
+        language: 'english',
+        flash: 0,
+        numbers: formattedPhone,
+        sender_id: senderId
+      },
+      {
+        headers: {
+          'authorization': process.env.FAST2SMS_API_KEY,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (response.data.return === true) {
+      console.log('[SMS] ✅ Sent successfully to:', formattedPhone);
+      console.log('[SMS] Message ID:', response.data.message_id);
+      
+      return {
+        sent: true,
+        recipient: formattedPhone,
+        messageId: response.data.message_id,
+        timestamp: new Date()
+      };
     } else {
-      payload.from = smsFrom;
+      throw new Error(response.data.message || 'Fast2SMS API returned failure');
     }
-
-    const result = await smsClient.messages.create(payload);
-
-    console.log('[SMS] ✅ Sent successfully to:', formattedPhone);
-    console.log('[SMS] Message SID:', result.sid);
-    
-    return {
-      sent: true,
-      recipient: formattedPhone,
-      messageSid: result.sid,
-      timestamp: new Date()
-    };
   } catch (error) {
-    console.error('[SMS] ❌ Failed to send:', error.message);
+    console.error('[SMS] ❌ Failed to send:', error.response?.data || error.message);
     return {
       sent: false,
       recipient: candidateMobile,
-      error: error.message,
+      error: error.response?.data?.message || error.message,
       timestamp: new Date()
     };
   }

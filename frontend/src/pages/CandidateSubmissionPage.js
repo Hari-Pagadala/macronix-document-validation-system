@@ -447,7 +447,7 @@ const CandidateSubmissionPage = () => {
               Ownership Details
             </Typography>
             <Grid container spacing={2}>
-              <Grid item xs={12}>
+              <Grid item xs={12} sx={{ minWidth: '200px' }}>
                 <FormControl fullWidth required>
                   <InputLabel>Ownership Type</InputLabel>
                   <Select
