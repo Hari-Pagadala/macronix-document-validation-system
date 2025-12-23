@@ -25,11 +25,77 @@ import {
 import axios from 'axios';
 // ImageKit images displayed as regular img tags with URL transformations
 import { useAuth } from '../context/AuthContext';
-import { UPLOADS_BASE_URL } from '../config';
+import API_BASE_URL, { UPLOADS_BASE_URL } from '../config';
 
 // Helper to detect if URL is ImageKit URL or local file path
 const isImageKitUrl = (url) => {
   return typeof url === 'string' && url.includes('ik.imagekit.io');
+};
+
+const toRad = (deg) => (deg * Math.PI) / 180;
+
+const computeDistanceMeters = (lat1, lng1, lat2, lng2) => {
+  const nums = [lat1, lng1, lat2, lng2].map((v) => (v === null || v === undefined ? NaN : Number(v)));
+  if (nums.some((v) => Number.isNaN(v))) return null;
+  const [p1Lat, p1Lng, p2Lat, p2Lng] = nums;
+  const R = 6371000;
+  const dLat = toRad(p2Lat - p1Lat);
+  const dLng = toRad(p2Lng - p1Lng);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(p1Lat)) * Math.cos(toRad(p2Lat)) * Math.sin(dLng / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c);
+};
+
+const formatCoords = (lat, lng) => {
+  if (!lat || !lng) return 'N/A';
+  const nLat = Number(lat);
+  const nLng = Number(lng);
+  if (Number.isNaN(nLat) || Number.isNaN(nLng)) return 'N/A';
+  return `${nLat.toFixed(6)}, ${nLng.toFixed(6)}`;
+};
+
+const formatDistance = (meters) => {
+  if (meters === null || meters === undefined) return 'N/A';
+  if (meters >= 1000) return `${(meters / 1000).toFixed(2)} km`;
+  return `${Math.round(meters)} meters`;
+};
+const deriveZoomFromDistance = (meters) => {
+  if (meters === null || meters === undefined) return 14;
+  if (meters <= 200) return 17;
+  if (meters <= 600) return 16;
+  if (meters <= 1500) return 15;
+  if (meters <= 4000) return 14;
+  if (meters <= 12000) return 13;
+  if (meters <= 25000) return 12;
+  return 11;
+};
+
+const MAP_PROVIDER = process.env.REACT_APP_MAP_PROVIDER || (process.env.REACT_APP_GOOGLE_MAPS_KEY ? 'google' : 'osm');
+const GOOGLE_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY;
+const MAPBOX_TOKEN = process.env.REACT_APP_MAPBOX_TOKEN;
+
+const buildGoogleEmbedUrl = (lat1, lng1, lat2, lng2) => {
+  const nums = [lat1, lng1, lat2, lng2].map((v) => Number(v));
+  if (nums.some((v) => !Number.isFinite(v))) return null;
+  const [oLat, oLng, dLat, dLng] = nums;
+  // Keyless Google embed using legacy saddr/daddr params
+  return `https://maps.google.com/maps?saddr=${oLat},${oLng}&daddr=${dLat},${dLng}&output=embed`; 
+};
+
+const buildStaticMapUrl = (lat1, lng1, lat2, lng2) => {
+  const nums = [lat1, lng1, lat2, lng2].map((v) => Number(v));
+  if (nums.some((v) => !Number.isFinite(v))) return null;
+  const [uploadedLat, uploadedLng, submittedLat, submittedLng] = nums;
+  const rootBase = API_BASE_URL.replace(/\/api$/, '');
+  const params = new URLSearchParams({
+    uploadedLat: String(uploadedLat),
+    uploadedLng: String(uploadedLng),
+    submittedLat: String(submittedLat),
+    submittedLng: String(submittedLng),
+    width: '600',
+    height: '280'
+  });
+  return `${rootBase}/api/map/static?${params.toString()}`;
 };
 
 const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
@@ -54,6 +120,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
   const [rejectionReason, setRejectionReason] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [candidateLink, setCandidateLink] = useState(null);
+  const [mapError, setMapError] = useState(false);
   // Image preview (lightbox)
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewSrc, setPreviewSrc] = useState('');
@@ -63,6 +130,46 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
   const [panning, setPanning] = useState(false);
   const panStartRef = React.useRef({ x: 0, y: 0 });
   const offsetStartRef = React.useRef({ x: 0, y: 0 });
+
+  const uploadedLat = record?.gpsLat;
+  const uploadedLng = record?.gpsLng;
+  const submittedLat = record?.submittedGpsLat || verification?.gpsLat;
+  const submittedLng = record?.submittedGpsLng || verification?.gpsLng;
+
+  const parsedUploaded = {
+    lat: uploadedLat !== undefined && uploadedLat !== null ? Number(uploadedLat) : NaN,
+    lng: uploadedLng !== undefined && uploadedLng !== null ? Number(uploadedLng) : NaN
+  };
+  const parsedSubmitted = {
+    lat: submittedLat !== undefined && submittedLat !== null ? Number(submittedLat) : NaN,
+    lng: submittedLng !== undefined && submittedLng !== null ? Number(submittedLng) : NaN
+  };
+
+  const hasUploadedGps = !Number.isNaN(parsedUploaded.lat) && !Number.isNaN(parsedUploaded.lng);
+  const hasSubmittedGps = !Number.isNaN(parsedSubmitted.lat) && !Number.isNaN(parsedSubmitted.lng);
+  const canShowMap = hasUploadedGps && hasSubmittedGps;
+
+  const fallbackDistance = canShowMap
+    ? computeDistanceMeters(parsedUploaded.lat, parsedUploaded.lng, parsedSubmitted.lat, parsedSubmitted.lng)
+    : null;
+
+  const distanceMeters = record?.gpsDistanceMeters ?? fallbackDistance;
+  const distanceIsWarning = distanceMeters !== null && distanceMeters !== undefined && distanceMeters > 1000;
+  const staticMapUrl = canShowMap
+    ? buildStaticMapUrl(parsedUploaded.lat, parsedUploaded.lng, parsedSubmitted.lat, parsedSubmitted.lng)
+    : null;
+  const embedUrl = canShowMap ? buildGoogleEmbedUrl(parsedUploaded.lat, parsedUploaded.lng, parsedSubmitted.lat, parsedSubmitted.lng) : null;
+
+  useEffect(() => {
+    // Reset map error when coordinates change
+    setMapError(false);
+    // Diagnostics for map rendering
+    try {
+      console.log('[Map] Provider:', MAP_PROVIDER, '| Google key present:', !!GOOGLE_KEY);
+      console.log('[Map] staticMapUrl:', staticMapUrl);
+      console.log('[Map] embedUrl:', embedUrl);
+    } catch (e) {}
+  }, [staticMapUrl, embedUrl]);
 
   useEffect(() => {
     if (open && recordId) {
@@ -76,7 +183,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
     try {
       setLoading(true);
       setError('');
-      const response = await axios.get(`http://localhost:5000/api/records/${recordId}`, {
+      const response = await axios.get(`${API_BASE_URL}/records/${recordId}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -92,7 +199,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
 
   const fetchVerification = async () => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/records/${recordId}/verification`, {
+      const response = await axios.get(`${API_BASE_URL}/records/${recordId}/verification`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       console.log('[ViewDetails] Verification data:', response.data.verification);
@@ -107,7 +214,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
 
   const fetchCandidateLink = async () => {
     try {
-      const response = await axios.get(`http://localhost:5000/api/records/${recordId}/candidate-link`, {
+      const response = await axios.get(`${API_BASE_URL}/records/${recordId}/candidate-link`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (response.data.success && response.data.link) {
@@ -163,7 +270,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
     try {
       setStopping(true);
       const response = await axios.put(
-        `http://localhost:5000/api/records/${recordId}/stop`,
+        `${API_BASE_URL}/records/${recordId}/stop`,
         { reason: stopReason },
         {
           headers: {
@@ -191,7 +298,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
     try {
       setReverting(true);
       const response = await axios.put(
-        `http://localhost:5000/api/records/${recordId}/revert`,
+        `${API_BASE_URL}/records/${recordId}/revert`,
         {},
         {
           headers: {
@@ -218,7 +325,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
     try {
       setApproving(true);
       const response = await axios.put(
-        `http://localhost:5000/api/records/${recordId}/approve`,
+        `${API_BASE_URL}/records/${recordId}/approve`,
         {},
         {
           headers: {
@@ -249,7 +356,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
     try {
       setRejecting(true);
       const response = await axios.put(
-        `http://localhost:5000/api/records/${recordId}/reject`,
+        `${API_BASE_URL}/records/${recordId}/reject`,
         { reason: rejectionReason },
         {
           headers: {
@@ -277,7 +384,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
     try {
       setReinitiating(true);
       const response = await axios.put(
-        `http://localhost:5000/api/records/${recordId}/reinitiate`,
+        `${API_BASE_URL}/records/${recordId}/reinitiate`,
         {},
         {
           headers: {
@@ -304,7 +411,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
     try {
       setSendingBack(true);
       const response = await axios.put(
-        `http://localhost:5000/api/records/${recordId}/send-back`,
+        `${API_BASE_URL}/records/${recordId}/send-back`,
         {},
         {
           headers: {
@@ -333,7 +440,7 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
       setError('');
       
       const response = await axios.get(
-        `http://localhost:5000/api/download/case/${recordId}/pdf`,
+        `${API_BASE_URL}/download/case/${recordId}/pdf`,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -465,6 +572,8 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
               <DetailRow label="State" value={record.state} />
               <DetailRow label="District" value={record.district} />
               <DetailRow label="Pincode" value={record.pincode} />
+              <DetailRow label="GPS Latitude" value={record.gpsLat !== undefined && record.gpsLat !== null ? Number(record.gpsLat).toFixed(6) : 'N/A'} />
+              <DetailRow label="GPS Longitude" value={record.gpsLng !== undefined && record.gpsLng !== null ? Number(record.gpsLng).toFixed(6) : 'N/A'} />
             </Paper>
 
             {/* Assignment Information Section */}
@@ -573,21 +682,87 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                     <DetailRow label="GPS" value={`${verification.gpsLat}, ${verification.gpsLng}`} />
                   </>
                 )}
+
+                <Paper sx={{ p: 2, mb: 3, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: '#0f172a' }}>
+                    📍 Location Verification
+                  </Typography>
+
+                  {!canShowMap ? (
+                    <Typography variant="body2" color="text.secondary">
+                      Location data not available
+                    </Typography>
+                  ) : (
+                    <>
+                      <Grid container spacing={2} sx={{ mb: 2 }}>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="subtitle2" sx={{ color: '#475569', fontWeight: 600 }}>Uploaded Location</Typography>
+                          <Typography variant="body2" sx={{ color: '#0f172a' }}>{formatCoords(uploadedLat, uploadedLng)}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="subtitle2" sx={{ color: '#475569', fontWeight: 600 }}>Submitted Location</Typography>
+                          <Typography variant="body2" sx={{ color: '#0f172a' }}>{formatCoords(submittedLat, submittedLng)}</Typography>
+                        </Grid>
+                        <Grid item xs={12} sm={4}>
+                          <Typography variant="subtitle2" sx={{ color: '#475569', fontWeight: 600 }}>Distance</Typography>
+                          <Typography variant="body2" sx={{ color: distanceIsWarning ? '#c2410c' : '#0f172a', fontWeight: distanceIsWarning ? 700 : 500 }}>
+                            {formatDistance(distanceMeters)}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+
+                      <Box sx={{ height: 280, borderRadius: 2, overflow: 'hidden', boxShadow: 'inset 0 0 0 1px #e2e8f0' }}>
+                        {staticMapUrl && !mapError ? (
+                          <Box
+                            component="img"
+                            src={staticMapUrl}
+                            alt="Location map"
+                            sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={() => setMapError(true)}
+                          />
+                        ) : embedUrl ? (
+                          <Box component="iframe"
+                            src={embedUrl}
+                            title="Map preview"
+                            sx={{ border: 0, width: '100%', height: '100%' }}
+                            loading="lazy"
+                            allowFullScreen
+                          />
+                        ) : (
+                          <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e2e8f0', textAlign: 'center', px: 2 }}>
+                            <Typography variant="body2" color="text.secondary">
+                              Map unavailable. Uploaded: {formatCoords(uploadedLat, uploadedLng)} | Submitted: {formatCoords(submittedLat, submittedLng)}
+                            </Typography>
+                          </Box>
+                        )}
+                      </Box>
+                    </>
+                  )}
+                </Paper>
                 
                 {/* Images Section - Different layout for candidate vs FO submissions */}
                 {!verification.fieldOfficerId ? (
-                  /* Candidate Submission Images */
+                  /* Candidate Submission - Photo Only */
                   <>
+                    {/* Candidate Selfie Photo */}
                     <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
                         Candidate Selfie
                       </Typography>
-                      {verification.candidateWithRespondentPath ? (
+                      {verification.candidateSelfieData ? (
                         (() => {
-                          const displayUrl = isImageKitUrl(verification.candidateWithRespondentPath) ? verification.candidateWithRespondentPath : `${UPLOADS_BASE_URL}/${verification.candidateWithRespondentPath}`;
+                          const photoData = typeof verification.candidateSelfieData === 'string' 
+                            ? JSON.parse(verification.candidateSelfieData) 
+                            : verification.candidateSelfieData;
+                          const displayUrl = isImageKitUrl(photoData.url) ? photoData.url : `${UPLOADS_BASE_URL}/${photoData.url}`;
                           return (
-                            <Box sx={{ width: '100%', maxWidth: 300 }}>
-                              <Box component="img" src={displayUrl} alt="Candidate Selfie" sx={{ width: '100%', height: 180, objectFit: 'cover', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'Candidate Selfie')} />
+                            <Box>
+                              <Box component="img" src={displayUrl} alt="Candidate Selfie" sx={{ width: '100%', maxWidth: 300, height: 'auto', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'Candidate Selfie')} />
+                              <Typography variant="caption" display="block" sx={{ mt: 1, color: '#999' }}>
+                                <strong>Latitude:</strong> {photoData.latitude?.toFixed(6) || 'N/A'}<br/>
+                                <strong>Longitude:</strong> {photoData.longitude?.toFixed(6) || 'N/A'}<br/>
+                                <strong>Timestamp:</strong> {new Date(photoData.timestamp).toLocaleString()}
+                              </Typography>
                             </Box>
                           );
                         })()
@@ -595,35 +770,26 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                         <Typography variant="body2" color="text.secondary">Not provided</Typography>
                       )}
                     </Box>
+
+                    {/* ID Proof Photo */}
                     <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
                       <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
-                        Candidate House Photo
+                        ID Proof
                       </Typography>
-                      {(verification.photos || []).length > 0 ? (
-                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
-                          {(verification.photos || []).map((file, index) => {
-                            const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
-                            return (
-                              <Box key={index} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
-                                <Box component="img" src={displayUrl} alt="House Photo" sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openPreview(displayUrl, 'House Photo')} />
-                              </Box>
-                            );
-                          })}
-                        </Box>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">Not provided</Typography>
-                      )}
-                    </Box>
-                    <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
-                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
-                        Candidate Selfie with House
-                      </Typography>
-                      {verification.selfieWithHousePath ? (
+                      {verification.idProofData ? (
                         (() => {
-                          const displayUrl = isImageKitUrl(verification.selfieWithHousePath) ? verification.selfieWithHousePath : `${UPLOADS_BASE_URL}/${verification.selfieWithHousePath}`;
+                          const photoData = typeof verification.idProofData === 'string' 
+                            ? JSON.parse(verification.idProofData) 
+                            : verification.idProofData;
+                          const displayUrl = isImageKitUrl(photoData.url) ? photoData.url : `${UPLOADS_BASE_URL}/${photoData.url}`;
                           return (
-                            <Box sx={{ width: '100%', maxWidth: 300 }}>
-                              <Box component="img" src={displayUrl} alt="Selfie with House" sx={{ width: '100%', height: 180, objectFit: 'cover', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'Selfie with House')} />
+                            <Box>
+                              <Box component="img" src={displayUrl} alt="ID Proof" sx={{ width: '100%', maxWidth: 300, height: 'auto', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'ID Proof')} />
+                              <Typography variant="caption" display="block" sx={{ mt: 1, color: '#999' }}>
+                                <strong>Latitude:</strong> {photoData.latitude?.toFixed(6) || 'N/A'}<br/>
+                                <strong>Longitude:</strong> {photoData.longitude?.toFixed(6) || 'N/A'}<br/>
+                                <strong>Timestamp:</strong> {new Date(photoData.timestamp).toLocaleString()}
+                              </Typography>
                             </Box>
                           );
                         })()
@@ -631,23 +797,33 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                         <Typography variant="body2" color="text.secondary">Not provided</Typography>
                       )}
                     </Box>
-                    {(verification.documents || []).length > 0 && (
-                      <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
-                        <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
-                          Additional Documents
-                        </Typography>
-                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 1.5 }}>
-                          {(verification.documents || []).map((file, index) => {
-                            const displayUrl = isImageKitUrl(file) ? file : `${UPLOADS_BASE_URL}/${file}`;
-                            return (
-                              <Box key={index} sx={{ border: '1px solid #eee', borderRadius: '4px', overflow: 'hidden', backgroundColor: '#f5f5f5' }}>
-                                <Box component="img" src={displayUrl} alt={`Document ${index + 1}`} sx={{ width: '100%', height: '150px', objectFit: 'cover', cursor: 'pointer' }} onClick={() => openPreview(displayUrl, `Document ${index + 1}`)} />
-                              </Box>
-                            );
-                          })}
-                        </Box>
-                      </Box>
-                    )}
+
+                    {/* House Door Photo */}
+                    <Box sx={{ py: 1.5, borderBottom: '1px solid #eee' }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666', mb: 1 }}>
+                        House Door Photo
+                      </Typography>
+                      {verification.houseDoorPhotoData ? (
+                        (() => {
+                          const photoData = typeof verification.houseDoorPhotoData === 'string' 
+                            ? JSON.parse(verification.houseDoorPhotoData) 
+                            : verification.houseDoorPhotoData;
+                          const displayUrl = isImageKitUrl(photoData.url) ? photoData.url : `${UPLOADS_BASE_URL}/${photoData.url}`;
+                          return (
+                            <Box>
+                              <Box component="img" src={displayUrl} alt="House Door Photo" sx={{ width: '100%', maxWidth: 300, height: 'auto', border: '1px solid #eee', mt: 1, cursor: 'pointer', borderRadius: 1 }} onClick={() => openPreview(displayUrl, 'House Door Photo')} />
+                              <Typography variant="caption" display="block" sx={{ mt: 1, color: '#999' }}>
+                                <strong>Latitude:</strong> {photoData.latitude?.toFixed(6) || 'N/A'}<br/>
+                                <strong>Longitude:</strong> {photoData.longitude?.toFixed(6) || 'N/A'}<br/>
+                                <strong>Timestamp:</strong> {new Date(photoData.timestamp).toLocaleString()}
+                              </Typography>
+                            </Box>
+                          );
+                        })()
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">Not provided</Typography>
+                      )}
+                    </Box>
                   </>
                 ) : (
                   /* Field Officer Submission Images */

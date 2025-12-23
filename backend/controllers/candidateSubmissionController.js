@@ -2,8 +2,7 @@ const Record = require('../models/Record_SQL');
 const Verification = require('../models/Verification_SQL');
 const CandidateToken = require('../models/CandidateToken_SQL');
 const { validateCandidateToken, markTokenAsUsed } = require('../utils/candidateTokenUtils');
-const path = require('path');
-const fs = require('fs');
+const { haversineDistanceMeters } = require('../utils/gpsDistance');
 
 /**
  * Validate candidate token and get case details
@@ -78,7 +77,7 @@ exports.validateToken = async (req, res) => {
 exports.submitVerification = async (req, res) => {
   try {
     const { token } = req.params;
-    const { body, files } = req;
+    const { body } = req;
 
     console.log('[Candidate] Submission received for token:', token);
 
@@ -107,46 +106,18 @@ exports.submitVerification = async (req, res) => {
       });
     }
 
-    // Parse body data (multipart form data)
-    const parseField = (field) => {
-      if (typeof field === 'string') {
-        try {
-          return JSON.parse(field);
-        } catch {
-          return field;
-        }
-      }
-      return field;
-    };
-
+    // Parse photo data (contains url, latitude, longitude, timestamp)
     const {
-      address,
-      pincode,
-      landmark,
-      city,
-      state,
-      ownershipType,
-      ownerName,
-      relationWithOwner,
-      periodOfStay,
+      candidateSelfieData,
+      idProofData,
+      houseDoorPhotoData,
       gpsLat,
       gpsLng,
-      verificationNotes,
-      candidateSelfie,
-      housePhoto,
-      selfieWithHouse,
-      candidateSignature,
-      documents
+      ownershipType,
+      periodOfStay
     } = body;
 
-    // Validate required fields
-    if (!address || !pincode || !city || !state) {
-      return res.status(400).json({
-        success: false,
-        message: 'Address details are required'
-      });
-    }
-
+    // Validate ownership details
     if (!ownershipType) {
       return res.status(400).json({
         success: false,
@@ -154,95 +125,96 @@ exports.submitVerification = async (req, res) => {
       });
     }
 
-    if (!gpsLat || !gpsLng) {
+    if (!periodOfStay) {
       return res.status(400).json({
         success: false,
-        message: 'GPS location is required'
+        message: 'Period of stay is required'
       });
     }
 
-    // Check for required signature
-    const hasSignature = !!(candidateSignature || req.files?.candidateSignature);
-
-    if (!hasSignature) {
+    // Validate required photos
+    if (!candidateSelfieData) {
       return res.status(400).json({
         success: false,
-        message: 'Signature is required'
+        message: 'Candidate selfie is required'
       });
     }
 
-    // Process file uploads (ImageKit URLs or multer files)
-    const uploadDir = path.join(__dirname, '..', 'uploads', 'candidate');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+    if (!idProofData) {
+      return res.status(400).json({
+        success: false,
+        message: 'ID proof is required'
+      });
     }
 
-    let candidateSignaturePath = typeof candidateSignature === 'string' ? candidateSignature : null;
-    let docUrls = [];
-    let candidateSelfieUrl = typeof candidateSelfie === 'string' ? candidateSelfie : null;
-    let housePhotoUrl = typeof housePhoto === 'string' ? housePhoto : null;
-    let selfieUrl = typeof selfieWithHouse === 'string' ? selfieWithHouse : null;
-
-    // Handle multer files if present
-    if (req.files) {
-      if (req.files.candidateSignature?.[0]) {
-        candidateSignaturePath = req.files.candidateSignature[0].filename;
-      }
-      if (req.files.documents) {
-        docUrls = req.files.documents.map(f => f.filename);
-      }
-      if (req.files.candidateSelfie?.[0]) {
-        candidateSelfieUrl = req.files.candidateSelfie[0].filename;
-      }
-      if (req.files.housePhoto?.[0]) {
-        housePhotoUrl = req.files.housePhoto[0].filename;
-      }
-      if (req.files.selfieWithHouse?.[0]) {
-        selfieUrl = req.files.selfieWithHouse[0].filename;
-      }
+    if (!houseDoorPhotoData) {
+      return res.status(400).json({
+        success: false,
+        message: 'House door photo is required'
+      });
     }
 
-    // Parse array URLs from ImageKit
-    if (typeof documents === 'string') {
-      try {
-        const parsed = JSON.parse(documents);
-        docUrls = Array.isArray(parsed) ? parsed : [];
-      } catch (e) {
-        console.error('[Candidate] Failed to parse documents:', e);
-      }
-    }
+    // Parse photo data objects
+    const parsedCandidateSelfie = typeof candidateSelfieData === 'string' 
+      ? JSON.parse(candidateSelfieData) 
+      : candidateSelfieData;
+    
+    const parsedIdProof = typeof idProofData === 'string' 
+      ? JSON.parse(idProofData) 
+      : idProofData;
+    
+    const parsedHouseDoorPhoto = typeof houseDoorPhotoData === 'string' 
+      ? JSON.parse(houseDoorPhotoData) 
+      : houseDoorPhotoData;
 
-    // Create verification record
+    console.log('[Candidate] Photo metadata received:', {
+      candidateSelfie: {
+        url: parsedCandidateSelfie?.url,
+        timestamp: parsedCandidateSelfie?.timestamp,
+        coords: `${parsedCandidateSelfie?.latitude}, ${parsedCandidateSelfie?.longitude}`
+      },
+      idProof: {
+        url: parsedIdProof?.url,
+        timestamp: parsedIdProof?.timestamp,
+        coords: `${parsedIdProof?.latitude}, ${parsedIdProof?.longitude}`
+      },
+      houseDoorPhoto: {
+        url: parsedHouseDoorPhoto?.url,
+        timestamp: parsedHouseDoorPhoto?.timestamp,
+        coords: `${parsedHouseDoorPhoto?.latitude}, ${parsedHouseDoorPhoto?.longitude}`
+      }
+    });
+
+    // Create verification record with photo metadata
+    const submittedGpsLat = gpsLat || parsedCandidateSelfie?.latitude || null;
+    const submittedGpsLng = gpsLng || parsedCandidateSelfie?.longitude || null;
+
     const verification = await Verification.create({
       recordId: record.id,
       fieldOfficerId: null, // No field officer for candidate submissions
-      periodOfStay: periodOfStay || null,
-      address,
-      pincode,
-      landmark: landmark || null,
-      city,
-      state,
       ownershipType,
-      ownerName: ownerName || null,
-      relationWithOwner: relationWithOwner || null,
-      gpsLat: parseFloat(gpsLat),
-      gpsLng: parseFloat(gpsLng),
-      verificationNotes: verificationNotes || null,
-      selfieWithHousePath: selfieUrl,
-      candidateWithRespondentPath: candidateSelfieUrl, // Store candidate selfie here
-      documents: docUrls.length > 0 ? docUrls : [],
-      photos: housePhotoUrl ? [housePhotoUrl] : [], // Store house photo here
-      officerSignaturePath: candidateSignaturePath, // Store candidate signature here
-      respondentSignaturePath: null, // Not used anymore
+      periodOfStay,
+      gpsLat: submittedGpsLat || 0,
+      gpsLng: submittedGpsLng || 0,
+      candidateSelfieData: parsedCandidateSelfie,
+      idProofData: parsedIdProof,
+      houseDoorPhotoData: parsedHouseDoorPhoto,
       verifiedBy: `Candidate: ${validation.token.candidateName}`,
       status: 'submitted'
     });
 
     // Update record status to submitted
+    const distanceMeters = record.gpsLat && record.gpsLng && submittedGpsLat && submittedGpsLng
+      ? haversineDistanceMeters(record.gpsLat, record.gpsLng, submittedGpsLat, submittedGpsLng)
+      : null;
+
     await record.update({
       status: 'submitted',
-      assignedFieldOfficer: null, // Clear FO assignment
-      completionDate: new Date() // Set completion date
+      assignedFieldOfficer: null,
+      completionDate: new Date(),
+      submittedGpsLat: submittedGpsLat,
+      submittedGpsLng: submittedGpsLng,
+      gpsDistanceMeters: distanceMeters
     });
 
     // Mark token as used

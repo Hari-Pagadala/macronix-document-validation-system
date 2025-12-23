@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -371,8 +371,8 @@ const ManualEntryPage = () => {
 
                     <Paper sx={{ p: 3 }}>
                         <form onSubmit={handleSubmit}>
-                    <Grid container spacing={2}>
-                        <Grid item xs={12}>
+                            <Grid container spacing={2}>
+                                <Grid item xs={12}>
                             <TextField
                                 fullWidth
                                 label="Case Number"
@@ -453,6 +453,7 @@ const ManualEntryPage = () => {
                                 multiline
                                 rows={2}
                                 required
+                                helperText="Format: Locality, Mandal/Taluk, District, State, Pincode, India"
                             />
                         </Grid>
                         <Grid item xs={12} sm={4}>
@@ -498,6 +499,27 @@ const ManualEntryPage = () => {
                                 error={!!pincodeError}
                                 helperText={pincodeError}
                                 inputProps={{ inputMode: 'numeric' }}
+                                onBlur={async () => {
+                                    const pin = formData.pincode?.trim();
+                                    if (pin && pin.length === 6) {
+                                        try {
+                                            const res = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+                                            const data = await res.json();
+                                            const office = data?.[0]?.PostOffice?.[0];
+                                            if (office) {
+                                                const newState = office.State || formData.state;
+                                                const newDistrict = office.District || formData.district;
+                                                setFormData((prev) => ({
+                                                    ...prev,
+                                                    state: newState,
+                                                    district: newDistrict
+                                                }));
+                                            }
+                                        } catch (e) {
+                                            console.warn('Pincode lookup failed', e.message);
+                                        }
+                                    }
+                                }}
                             />
                         </Grid>
                         <Grid item xs={12}>

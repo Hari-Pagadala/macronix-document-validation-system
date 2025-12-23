@@ -3,6 +3,7 @@ const Counter = require('../models/Counter_SQL');
 const Vendor = require('../models/Vendor_SQL');
 const FieldOfficer = require('../models/FieldOfficer_SQL');
 const Verification = require('../models/Verification_SQL');
+const { geocodeAddress } = require('../utils/geocode');
 const { createCandidateToken } = require('../utils/candidateTokenUtils');
 const { sendCandidateNotification } = require('../utils/notificationUtils');
 const { Op } = require('sequelize');
@@ -51,6 +52,17 @@ exports.createManualRecord = async (req, res) => {
         
         const referenceNumber = await generateReferenceNumber(); // Macronix reference
         const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+
+        // Geocode address to lat/lng (non-blocking on failure)
+        const { lat: gpsLat = null, lng: gpsLng = null, error: geoError } = await geocodeAddress({
+            address,
+            district,
+            state,
+            pincode
+        });
+        if (geoError) {
+            console.warn('[Geocode] Manual record geocoding failed:', geoError, { caseNumber });
+        }
         
         const record = await Record.create({
             caseNumber,
@@ -64,6 +76,8 @@ exports.createManualRecord = async (req, res) => {
             state,
             district,
             pincode,
+            gpsLat,
+            gpsLng,
             status: 'pending',
             remarks
         });
@@ -244,6 +258,17 @@ exports.bulkUpload = async (req, res) => {
                 const r = item.data;
                 const referenceNumber = await generateReferenceNumber();
                 const fullName = [r.firstName, r.lastName].filter(Boolean).join(' ').trim() || 'N/A';
+
+                const { lat: gpsLat = null, lng: gpsLng = null, error: geoError } = await geocodeAddress({
+                    address: r.address,
+                    district: r.district,
+                    state: r.state,
+                    pincode: r.pincode
+                });
+                if (geoError) {
+                    console.warn('[Geocode] Bulk upload geocoding failed:', geoError, { caseNumber: r.caseNumber, row: item.rowNumber });
+                }
+
                 const newRecord = await Record.create({
                     caseNumber: r.caseNumber,
                     referenceNumber,
@@ -256,6 +281,8 @@ exports.bulkUpload = async (req, res) => {
                     state: r.state,
                     district: r.district,
                     pincode: r.pincode,
+                    gpsLat,
+                    gpsLng,
                     status: 'pending',
                     uploadedDate: new Date()
                 }, { transaction });
@@ -517,6 +544,33 @@ exports.updateRecord = async (req, res) => {
             safeUpdateData.status = 'pending';
         }
         
+        // If address-related fields changed, re-geocode to update gpsLat/gpsLng
+        const addressChanged = (
+            safeUpdateData.address !== undefined ||
+            safeUpdateData.district !== undefined ||
+            safeUpdateData.state !== undefined ||
+            safeUpdateData.pincode !== undefined
+        );
+
+        if (addressChanged) {
+            const newAddress = safeUpdateData.address !== undefined ? safeUpdateData.address : record.address;
+            const newDistrict = safeUpdateData.district !== undefined ? safeUpdateData.district : record.district;
+            const newState = safeUpdateData.state !== undefined ? safeUpdateData.state : record.state;
+            const newPincode = safeUpdateData.pincode !== undefined ? safeUpdateData.pincode : record.pincode;
+
+            const { lat: gpsLat = null, lng: gpsLng = null, error: geoError } = await geocodeAddress({
+                address: newAddress,
+                district: newDistrict,
+                state: newState,
+                pincode: newPincode
+            });
+            if (geoError) {
+                console.warn('[Geocode] Update record geocoding failed:', geoError, { id });
+            }
+            safeUpdateData.gpsLat = gpsLat;
+            safeUpdateData.gpsLng = gpsLng;
+        }
+
         await record.update(safeUpdateData);
         
         // Fetch updated record with vendor and officer details
@@ -552,6 +606,34 @@ exports.updateRecord = async (req, res) => {
             success: false,
             message: error.message || 'Server error updating record'
         });
+    }
+};
+
+// Force re-geocode of a record's address to refresh gpsLat/gpsLng
+exports.reGeocodeRecord = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const record = await Record.findByPk(id);
+        if (!record) {
+            return res.status(404).json({ success: false, message: 'Record not found' });
+        }
+
+        const { lat: gpsLat = null, lng: gpsLng = null, error: geoError } = await geocodeAddress({
+            address: record.address,
+            district: record.district,
+            state: record.state,
+            pincode: record.pincode
+        });
+        if (geoError) {
+            console.warn('[Geocode] Re-geocode failed:', geoError, { id });
+        }
+
+        await record.update({ gpsLat, gpsLng });
+
+        res.json({ success: true, message: 'Record geocoded', record });
+    } catch (error) {
+        console.error('Error re-geocoding record:', error);
+        res.status(500).json({ success: false, message: error.message || 'Server error re-geocoding record' });
     }
 };
 
@@ -897,9 +979,18 @@ exports.sendBackToFieldOfficer = async (req, res) => {
 exports.assignToCandidate = async (req, res) => {
     try {
         const { id } = req.params;
-        const { candidateName, candidateEmail, candidateMobile, expiryHours = 48 } = req.body;
+        const { 
+            candidateName, 
+            candidateEmail, 
+            candidateMobile, 
+            expiryHours = 48,
+            sendEmail = true,
+            sendSMS = false 
+        } = req.body;
 
-        console.log('[Admin - Assign to Candidate] Request:', { id, candidateName, candidateEmail, candidateMobile });
+        console.log('[Admin - Assign to Candidate] Request:', { 
+            id, candidateName, candidateEmail, candidateMobile, sendEmail, sendSMS 
+        });
 
         // Validate required fields
         if (!candidateName || !candidateEmail || !candidateMobile) {
@@ -968,9 +1059,10 @@ exports.assignToCandidate = async (req, res) => {
         const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const submissionLink = `${baseUrl}/candidate/submit?token=${candidateToken.token}`;
 
-        // Send notification (email + SMS)
+        // Send notification (email and/or SMS based on options)
+        let notificationResult = { success: false };
         try {
-            await sendCandidateNotification({
+            notificationResult = await sendCandidateNotification({
                 candidateName,
                 candidateEmail,
                 candidateMobile,
@@ -978,8 +1070,19 @@ exports.assignToCandidate = async (req, res) => {
                 referenceNumber: record.referenceNumber,
                 submissionLink,
                 expiresAt: candidateToken.expiresAt
+            }, {
+                sendEmail,
+                sendSMS
             });
-            console.log('[Admin - Assign to Candidate] Notification sent successfully');
+            
+            // Update notification status in token
+            const { updateNotificationStatus } = require('../utils/candidateTokenUtils');
+            await updateNotificationStatus(candidateToken.id, notificationResult);
+            
+            console.log('[Admin - Assign to Candidate] Notification result:', {
+                email: notificationResult.email?.sent ? 'SENT' : 'FAILED',
+                sms: notificationResult.sms?.sent ? 'SENT' : 'FAILED'
+            });
         } catch (notifError) {
             console.error('[Admin - Assign to Candidate] Notification error:', notifError);
             // Continue even if notification fails
@@ -990,7 +1093,11 @@ exports.assignToCandidate = async (req, res) => {
             message: 'Case assigned to candidate successfully',
             record: record.toJSON(),
             submissionLink,
-            expiresAt: candidateToken.expiresAt
+            expiresAt: candidateToken.expiresAt,
+            notificationStatus: {
+                email: notificationResult.email || { sent: false, error: 'Not requested' },
+                sms: notificationResult.sms || { sent: false, error: 'Not requested' }
+            }
         });
 
     } catch (error) {
@@ -1075,9 +1182,15 @@ exports.getCandidateLink = async (req, res) => {
 exports.resendCandidateLink = async (req, res) => {
     try {
         const { id } = req.params;
-        const { expiryHours = 48 } = req.body;
+        const { 
+            expiryHours = 48,
+            sendEmail = true,
+            sendSMS = false 
+        } = req.body;
 
-        console.log('[Admin - Resend Candidate Link] Request:', { id, expiryHours });
+        console.log('[Admin - Resend Candidate Link] Request:', { 
+            id, expiryHours, sendEmail, sendSMS 
+        });
 
         // Find the case (admin can access any case)
         const record = await Record.findByPk(id);
@@ -1124,9 +1237,10 @@ exports.resendCandidateLink = async (req, res) => {
         const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const submissionLink = `${baseUrl}/candidate/submit?token=${candidateToken.token}`;
 
-        // Send notification (email + SMS)
+        // Send notification (email and/or SMS based on options)
+        let notificationResult = { success: false };
         try {
-            await sendCandidateNotification({
+            notificationResult = await sendCandidateNotification({
                 candidateName: record.candidateName,
                 candidateEmail: record.candidateEmail,
                 candidateMobile: record.candidateMobile,
@@ -1134,8 +1248,19 @@ exports.resendCandidateLink = async (req, res) => {
                 referenceNumber: record.referenceNumber,
                 submissionLink,
                 expiresAt: candidateToken.expiresAt
+            }, {
+                sendEmail,
+                sendSMS
             });
-            console.log('[Admin - Resend Candidate Link] Notification sent successfully');
+            
+            // Update notification status in token
+            const { updateNotificationStatus } = require('../utils/candidateTokenUtils');
+            await updateNotificationStatus(candidateToken.id, notificationResult);
+            
+            console.log('[Admin - Resend Candidate Link] Notification result:', {
+                email: notificationResult.email?.sent ? 'SENT' : 'FAILED',
+                sms: notificationResult.sms?.sent ? 'SENT' : 'FAILED'
+            });
         } catch (notifError) {
             console.error('[Admin - Resend Candidate Link] Notification error:', notifError);
             // Continue even if notification fails
@@ -1150,6 +1275,10 @@ exports.resendCandidateLink = async (req, res) => {
                 name: record.candidateName,
                 email: record.candidateEmail,
                 mobile: record.candidateMobile
+            },
+            notificationStatus: {
+                email: notificationResult.email || { sent: false, error: 'Not requested' },
+                sms: notificationResult.sms || { sent: false, error: 'Not requested' }
             }
         });
 

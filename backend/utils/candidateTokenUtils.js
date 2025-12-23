@@ -128,11 +128,47 @@ const cleanupExpiredTokens = async () => {
   return result;
 };
 
+/**
+ * Update notification delivery status for a token
+ * @param {string} tokenId - Token ID
+ * @param {Object} notificationResult - Result from sendCandidateNotification
+ * @returns {Promise<boolean>} Success status
+ */
+const updateNotificationStatus = async (tokenId, notificationResult) => {
+  try {
+    const updateData = {};
+
+    // Update email status
+    if (notificationResult.email) {
+      updateData.emailStatus = notificationResult.email.sent ? 'SENT' : 'FAILED';
+      updateData.emailSentAt = notificationResult.email.sent ? notificationResult.email.timestamp || new Date() : null;
+      updateData.emailError = notificationResult.email.error || null;
+    }
+
+    // Update SMS status
+    if (notificationResult.sms) {
+      updateData.smsStatus = notificationResult.sms.sent ? 'SENT' : 'FAILED';
+      updateData.smsSentAt = notificationResult.sms.sent ? notificationResult.sms.timestamp || new Date() : null;
+      updateData.smsError = notificationResult.sms.error || null;
+    }
+
+    await CandidateToken.update(updateData, {
+      where: { id: tokenId }
+    });
+
+    return true;
+  } catch (error) {
+    console.error('[Token Utils] Failed to update notification status:', error);
+    return false;
+  }
+};
+
 module.exports = {
   generateSecureToken,
   createCandidateToken,
   validateCandidateToken,
   markTokenAsUsed,
   getTokenDetails,
-  cleanupExpiredTokens
+  cleanupExpiredTokens,
+  updateNotificationStatus
 };

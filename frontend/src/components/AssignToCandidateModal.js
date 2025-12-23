@@ -11,7 +11,10 @@ import {
   Typography,
   CircularProgress,
   IconButton,
-  InputAdornment
+  InputAdornment,
+  FormControlLabel,
+  Checkbox,
+  FormGroup
 } from '@mui/material';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import axios from 'axios';
@@ -22,12 +25,15 @@ const AssignToCandidateModal = ({ open, onClose, caseData, onSuccess }) => {
   const [error, setError] = useState('');
   const [submissionLink, setSubmissionLink] = useState('');
   const [expiresAt, setExpiresAt] = useState(null);
+  const [notificationStatus, setNotificationStatus] = useState(null);
 
   const [formData, setFormData] = useState({
     candidateName: '',
     candidateEmail: '',
     candidateMobile: '',
-    expiryHours: 48
+    expiryHours: 48,
+    sendEmail: true,
+    sendSMS: false
   });
 
   // Auto-populate candidate info from case data
@@ -37,17 +43,24 @@ const AssignToCandidateModal = ({ open, onClose, caseData, onSuccess }) => {
         candidateName: caseData.fullName || `${caseData.firstName || ''} ${caseData.lastName || ''}`.trim() || '',
         candidateEmail: caseData.email || '',
         candidateMobile: caseData.contactNumber || '',
-        expiryHours: 48
+        expiryHours: 48,
+        sendEmail: true,
+        sendSMS: false
       });
+      // Reset states
+      setSubmissionLink('');
+      setExpiresAt(null);
+      setNotificationStatus(null);
+      setError('');
     }
   }, [caseData, open]);
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
-    // Only allow changing expiryHours
-    if (name === 'expiryHours') {
-      setFormData(prev => ({ ...prev, [name]: value }));
-    }
+    const { name, value, checked, type } = e.target;
+    setFormData(prev => ({ 
+      ...prev, 
+      [name]: type === 'checkbox' ? checked : value 
+    }));
   };
 
   const handleSubmit = async () => {
@@ -59,14 +72,19 @@ const AssignToCandidateModal = ({ open, onClose, caseData, onSuccess }) => {
       return;
     }
 
+    if (!formData.sendEmail && !formData.sendSMS) {
+      setError('Please select at least one notification method (Email or SMS)');
+      return;
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.candidateEmail)) {
+    if (formData.sendEmail && !emailRegex.test(formData.candidateEmail)) {
       setError('Invalid email format');
       return;
     }
 
     const mobileRegex = /^[0-9]{10}$/;
-    if (!mobileRegex.test(formData.candidateMobile)) {
+    if (formData.sendSMS && !mobileRegex.test(formData.candidateMobile)) {
       setError('Mobile number must be exactly 10 digits');
       return;
     }
@@ -88,6 +106,7 @@ const AssignToCandidateModal = ({ open, onClose, caseData, onSuccess }) => {
       if (response.data.success) {
         setSubmissionLink(response.data.submissionLink);
         setExpiresAt(response.data.expiresAt);
+        setNotificationStatus(response.data.notificationStatus);
         
         if (onSuccess) {
           onSuccess(response.data.record);
@@ -189,6 +208,59 @@ const AssignToCandidateModal = ({ open, onClose, caseData, onSuccess }) => {
               inputProps={{ min: 1, max: 168 }}
               helperText="Default: 48 hours (2 days)"
             />
+
+            <Box>
+              <Typography variant="subtitle2" gutterBottom>
+                Notification Channels
+              </Typography>
+              <FormGroup>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.sendEmail}
+                      onChange={handleChange}
+                      name="sendEmail"
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2">
+                        Send Email
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Link will be sent to: {formData.candidateEmail || 'N/A'}
+                      </Typography>
+                    </Box>
+                  }
+                />
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={formData.sendSMS}
+                      onChange={handleChange}
+                      name="sendSMS"
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2">
+                        Send SMS
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Link will be sent to: +91 {formData.candidateMobile || 'N/A'}
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </FormGroup>
+              <Alert severity="warning" sx={{ mt: 1 }}>
+                <Typography variant="caption">
+                  At least one notification method must be selected. Email is recommended as primary channel.
+                </Typography>
+              </Alert>
+            </Box>
           </Box>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
@@ -209,6 +281,39 @@ const AssignToCandidateModal = ({ open, onClose, caseData, onSuccess }) => {
               <strong>Expires:</strong> {expiresAt ? new Date(expiresAt).toLocaleString() : 'N/A'}
             </Typography>
 
+            {/* Notification Status */}
+            {notificationStatus && (
+              <Box>
+                <Typography variant="subtitle2" gutterBottom>
+                  Notification Status:
+                </Typography>
+                {notificationStatus.email && (
+                  <Alert 
+                    severity={notificationStatus.email.sent ? "success" : "error"} 
+                    sx={{ mb: 1 }}
+                  >
+                    <Typography variant="caption">
+                      <strong>Email:</strong> {notificationStatus.email.sent ? 
+                        `✅ Sent successfully to ${notificationStatus.email.recipient}` : 
+                        `❌ Failed: ${notificationStatus.email.error}`}
+                    </Typography>
+                  </Alert>
+                )}
+                {notificationStatus.sms && (
+                  <Alert 
+                    severity={notificationStatus.sms.sent ? "success" : "error"}
+                    sx={{ mb: 1 }}
+                  >
+                    <Typography variant="caption">
+                      <strong>SMS:</strong> {notificationStatus.sms.sent ? 
+                        `✅ Sent successfully to ${notificationStatus.sms.recipient}` : 
+                        `❌ Failed: ${notificationStatus.sms.error}`}
+                    </Typography>
+                  </Alert>
+                )}
+              </Box>
+            )}
+
             <TextField
               fullWidth
               label="Submission Link"
@@ -225,10 +330,6 @@ const AssignToCandidateModal = ({ open, onClose, caseData, onSuccess }) => {
               }}
               sx={{ mt: 2 }}
             />
-
-            <Alert severity="info">
-              An email and SMS notification has been sent to the candidate with the submission link.
-            </Alert>
           </Box>
         )}
       </DialogContent>

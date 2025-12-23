@@ -334,9 +334,18 @@ exports.assignToCandidate = async (req, res) => {
     try {
         const vendorId = req.userId;
         const { caseId } = req.params;
-        const { candidateName, candidateEmail, candidateMobile, expiryHours = 48 } = req.body;
+        const { 
+            candidateName, 
+            candidateEmail, 
+            candidateMobile, 
+            expiryHours = 48,
+            sendEmail = true,
+            sendSMS = false 
+        } = req.body;
 
-        console.log('[Assign to Candidate] Request:', { caseId, candidateName, candidateEmail, candidateMobile });
+        console.log('[Assign to Candidate] Request:', { 
+            caseId, candidateName, candidateEmail, candidateMobile, sendEmail, sendSMS 
+        });
 
         // Validate required fields
         if (!candidateName || !candidateEmail || !candidateMobile) {
@@ -402,9 +411,10 @@ exports.assignToCandidate = async (req, res) => {
         const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
         const submissionLink = `${baseUrl}/candidate/submit?token=${candidateToken.token}`;
 
-        // Send notification (email + SMS)
+        // Send notification (email and/or SMS based on options)
+        let notificationResult = { success: false };
         try {
-            await sendCandidateNotification({
+            notificationResult = await sendCandidateNotification({
                 candidateName,
                 candidateEmail,
                 candidateMobile,
@@ -412,8 +422,19 @@ exports.assignToCandidate = async (req, res) => {
                 referenceNumber: record.referenceNumber,
                 submissionLink,
                 expiresAt: candidateToken.expiresAt
+            }, {
+                sendEmail,
+                sendSMS
             });
-            console.log('[Assign to Candidate] Notification sent successfully');
+            
+            // Update notification status in token
+            const { updateNotificationStatus } = require('../utils/candidateTokenUtils');
+            await updateNotificationStatus(candidateToken.id, notificationResult);
+            
+            console.log('[Assign to Candidate] Notification result:', {
+                email: notificationResult.email?.sent ? 'SENT' : 'FAILED',
+                sms: notificationResult.sms?.sent ? 'SENT' : 'FAILED'
+            });
         } catch (notifError) {
             console.error('[Assign to Candidate] Notification error:', notifError);
             // Continue even if notification fails
@@ -424,7 +445,11 @@ exports.assignToCandidate = async (req, res) => {
             message: 'Case assigned to candidate successfully',
             record: record.toJSON(),
             submissionLink,
-            expiresAt: candidateToken.expiresAt
+            expiresAt: candidateToken.expiresAt,
+            notificationStatus: {
+                email: notificationResult.email || { sent: false, error: 'Not requested' },
+                sms: notificationResult.sms || { sent: false, error: 'Not requested' }
+            }
         });
 
     } catch (error) {

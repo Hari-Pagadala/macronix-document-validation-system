@@ -6,6 +6,7 @@ const { validatePassword } = require('../utils/passwordValidation');
 const { Op } = require('sequelize');
 const path = require('path');
 const fs = require('fs');
+const { haversineDistanceMeters } = require('../utils/gpsDistance');
 
 // Create field officer
 exports.createFieldOfficer = async (req, res) => {
@@ -403,6 +404,8 @@ exports.submitVerification = async (req, res) => {
             action,
             submissionGpsLat,
             submissionGpsLng,
+            gpsLat,
+            gpsLng,
             submissionTimestamp,
             // ImageKit URLs (new submission format)
             documents = [],
@@ -425,8 +428,8 @@ exports.submitVerification = async (req, res) => {
         });
 
         // Prefer submission GPS; fallback to selfie photo GPS; else error
-        const resolvedGpsLat = submissionGpsLat;
-        const resolvedGpsLng = submissionGpsLng;
+        const resolvedGpsLat = submissionGpsLat || gpsLat;
+        const resolvedGpsLng = submissionGpsLng || gpsLng;
         if (!resolvedGpsLat || !resolvedGpsLng) {
             return res.status(400).json({ success: false, message: 'GPS location is required at submission time.' });
         }
@@ -599,6 +602,13 @@ exports.submitVerification = async (req, res) => {
         } else {
             await Verification.create(payload);
         }
+
+        record.submittedGpsLat = resolvedGpsLat;
+        record.submittedGpsLng = resolvedGpsLng;
+        const distanceMeters = record.gpsLat && record.gpsLng
+            ? haversineDistanceMeters(record.gpsLat, record.gpsLng, resolvedGpsLat, resolvedGpsLng)
+            : null;
+        record.gpsDistanceMeters = distanceMeters;
 
         if (action === 'insufficient') {
             record.status = 'insufficient';

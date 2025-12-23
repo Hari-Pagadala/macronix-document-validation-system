@@ -17,6 +17,7 @@ router.put('/:id/approve', recordController.approveRecord);
 router.put('/:id/reject', recordController.rejectRecord);
 router.put('/:id/reinitiate', recordController.reinitiateRecord);
 router.put('/:id/send-back', recordController.sendBackToFieldOfficer);
+router.put('/:id/regeocode', recordController.reGeocodeRecord);
 router.get('/:id/verification', recordController.getRecordVerification);
 router.get('/:id/candidate-link', recordController.getCandidateLink);
 router.get('/:id', recordController.getRecordById);

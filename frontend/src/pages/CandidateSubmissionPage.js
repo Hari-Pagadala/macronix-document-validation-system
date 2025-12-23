@@ -4,28 +4,30 @@ import {
   Container,
   Paper,
   Typography,
-  TextField,
   Button,
   Grid,
   Alert,
   CircularProgress,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Select,
   Card,
   CardContent,
   Divider,
-  Chip
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import config from '../config';
-import { uploadToImageKit, uploadMultipleToImageKit } from '../utils/imagekitUpload';
+import { uploadToImageKit } from '../utils/imagekitUpload';
 
 const CandidateSubmissionPage = () => {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const token = searchParams.get('token');
 
   const [loading, setLoading] = useState(true);
@@ -33,39 +35,42 @@ const CandidateSubmissionPage = () => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [locationPermission, setLocationPermission] = useState(false);
+  const [cameraPermission, setCameraPermission] = useState(false);
 
-  const signatureCanvasRef = useRef(null);
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [hasSignature, setHasSignature] = useState(false);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
+  const fileInputRefs = useRef({});
+  const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStream, setCameraStream] = useState(null);
 
   const [tokenData, setTokenData] = useState(null);
   const [caseDetails, setCaseDetails] = useState(null);
   const [candidateInfo, setCandidateInfo] = useState(null);
 
-  const [formData, setFormData] = useState({
-    address: '',
-    pincode: '',
-    city: '',
-    state: '',
-    ownershipType: '',
-    ownerName: '',
-    relationWithOwner: '',
-    periodOfStay: '',
-    gpsLat: '',
-    gpsLng: '',
-    verificationNotes: ''
+  const [photos, setPhotos] = useState({
+    candidateSelfie: null, // { url, latitude, longitude, timestamp }
+    idProof: null,
+    houseDoorPhoto: null
   });
 
-  const [files, setFiles] = useState({
-    candidateSelfie: null,
-    housePhoto: null,
-    selfieWithHouse: null,
-    candidateSignature: null,
-    documents: []
+  const [formData, setFormData] = useState({
+    ownershipType: '',
+    periodOfStay: ''
   });
+
+  const [currentPhotoType, setCurrentPhotoType] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
 
   const ownershipTypes = ['owned', 'rented', 'family_owned', 'other'];
 
+  const photoLabels = {
+    candidateSelfie: 'Candidate Selfie',
+    idProof: 'ID Proof',
+    houseDoorPhoto: 'House Door Photo'
+  };
+
+  // Request permissions on mount
   useEffect(() => {
     if (!token) {
       setError('No token provided. Invalid access.');
@@ -74,33 +79,51 @@ const CandidateSubmissionPage = () => {
       return;
     }
 
+    requestPermissions();
     validateToken();
   }, [token]);
+
+  const requestPermissions = async () => {
+    // Request location permission
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLocationPermission(true);
+          setUserLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            timestamp: new Date().toISOString()
+          });
+          console.log('[Candidate] Location obtained:', position.coords);
+        },
+        (error) => {
+          console.warn('[Candidate] Location permission denied:', error);
+          setLocationPermission(false);
+        }
+      );
+    }
+
+    // Request camera permission (will be granted on first camera access)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop());
+      setCameraPermission(true);
+      console.log('[Candidate] Camera permission granted');
+    } catch (err) {
+      console.warn('[Candidate] Camera permission denied:', err);
+      setCameraPermission(false);
+    }
+  };
 
   const validateToken = async () => {
     try {
       setValidating(true);
       const response = await axios.get(`${config}/candidate/validate/${token}`);
-      
+
       if (response.data.success) {
         setTokenData(response.data);
         setCaseDetails(response.data.caseDetails);
         setCandidateInfo(response.data.candidateInfo);
-        
-        // Auto-fill address details from case
-        const caseData = response.data.caseDetails;
-        if (caseData) {
-          setFormData(prev => ({
-            ...prev,
-            address: caseData.address || '',
-            city: caseData.city || '',
-            state: caseData.state || '',
-            pincode: caseData.pincode || ''
-          }));
-        }
-        
-        // Auto-fill candidate location if available
-        getCurrentLocation();
       }
     } catch (err) {
       console.error('Token validation error:', err);
@@ -111,20 +134,127 @@ const CandidateSubmissionPage = () => {
     }
   };
 
-  const getCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setFormData(prev => ({
+  const startCamera = async (photoType) => {
+    try {
+      setCurrentPhotoType(photoType);
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: photoType === 'candidateSelfie' ? 'user' : 'environment' }
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setCameraStream(stream);
+        setCameraActive(true);
+      }
+    } catch (err) {
+      console.error('Camera error:', err);
+      setError('Unable to access camera. Please check permissions.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach(track => track.stop());
+      setCameraStream(null);
+      setCameraActive(false);
+      setCurrentPhotoType(null);
+    }
+  };
+
+  const capturePhoto = async () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    try {
+      const context = canvasRef.current.getContext('2d');
+      const video = videoRef.current;
+
+      // Set canvas dimensions to match video
+      canvasRef.current.width = video.videoWidth;
+      canvasRef.current.height = video.videoHeight;
+
+      // Draw video frame to canvas
+      context.drawImage(video, 0, 0);
+
+      // Convert to blob
+      canvasRef.current.toBlob(async (blob) => {
+        const file = new File(
+          [blob],
+          `${currentPhotoType}-${Date.now()}.jpg`,
+          { type: 'image/jpeg' }
+        );
+
+        // Get current location
+        const photoData = {
+          file,
+          latitude: userLocation?.latitude,
+          longitude: userLocation?.longitude,
+          timestamp: new Date().toISOString()
+        };
+
+        // Upload to ImageKit
+        try {
+          const url = await uploadToImageKit(file, `candidate/${currentPhotoType}`);
+
+          setPhotos(prev => ({
             ...prev,
-            gpsLat: position.coords.latitude.toFixed(6),
-            gpsLng: position.coords.longitude.toFixed(6)
+            [currentPhotoType]: {
+              url,
+              latitude: photoData.latitude,
+              longitude: photoData.longitude,
+              timestamp: photoData.timestamp
+            }
           }));
-        },
-        (error) => {
-          console.error('Geolocation error:', error);
+
+          console.log(`[Candidate] ${currentPhotoType} uploaded:`, {
+            url,
+            ...photoData
+          });
+
+          stopCamera();
+        } catch (uploadErr) {
+          console.error('Upload error:', uploadErr);
+          setError('Failed to upload photo. Please try again.');
         }
-      );
+      }, 'image/jpeg', 0.95);
+    } catch (err) {
+      console.error('Capture error:', err);
+      setError('Failed to capture photo. Please try again.');
+    }
+  };
+
+  const handleFileUpload = async (e, photoType) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      // Get current location
+      const photoData = {
+        file,
+        latitude: userLocation?.latitude,
+        longitude: userLocation?.longitude,
+        timestamp: new Date().toISOString()
+      };
+
+      // Upload to ImageKit
+      const url = await uploadToImageKit(file, `candidate/${photoType}`);
+
+      setPhotos(prev => ({
+        ...prev,
+        [photoType]: {
+          url,
+          latitude: photoData.latitude,
+          longitude: photoData.longitude,
+          timestamp: photoData.timestamp
+        }
+      }));
+
+      console.log(`[Candidate] ${photoType} uploaded:`, {
+        url,
+        ...photoData
+      });
+    } catch (err) {
+      console.error('Upload error:', err);
+      setError('Failed to upload photo. Please try again.');
     }
   };
 
@@ -133,151 +263,51 @@ const CandidateSubmissionPage = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleFileChange = (e) => {
-    const { name, files: selectedFiles } = e.target;
-    
-    if (name === 'documents' || name === 'photos') {
-      setFiles(prev => ({ ...prev, [name]: Array.from(selectedFiles) }));
-    } else {
-      setFiles(prev => ({ ...prev, [name]: selectedFiles[0] }));
-    }
-  };
-
-  // Signature canvas handlers
-  const startDrawing = (e) => {
-    const canvas = signatureCanvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left || e.touches?.[0]?.clientX - rect.left;
-    const y = e.clientY - rect.top || e.touches?.[0]?.clientY - rect.top;
-    
-    setIsDrawing(true);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-  };
-
-  const draw = (e) => {
-    if (!isDrawing) return;
-    
-    const canvas = signatureCanvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left || e.touches?.[0]?.clientX - rect.left;
-    const y = e.clientY - rect.top || e.touches?.[0]?.clientY - rect.top;
-    
-    ctx.lineTo(x, y);
-    ctx.strokeStyle = '#000';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-    setHasSignature(true);
-  };
-
-  const stopDrawing = () => {
-    setIsDrawing(false);
-  };
-
-  const clearSignature = () => {
-    const canvas = signatureCanvasRef.current;
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setHasSignature(false);
-    setFiles(prev => ({ ...prev, candidateSignature: null }));
-  };
-
-  const saveSignature = () => {
-    const canvas = signatureCanvasRef.current;
-    if (!canvas || !hasSignature) return;
-    
-    canvas.toBlob((blob) => {
-      const file = new File([blob], 'signature.png', { type: 'image/png' });
-      setFiles(prev => ({ ...prev, candidateSignature: file }));
-    }, 'image/png');
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSubmitting(true);
 
     try {
-      // Validate required fields
-      if (!formData.address || !formData.pincode || !formData.city || !formData.state) {
-        throw new Error('Please fill all address details');
-      }
-
+      // Validate ownership type
       if (!formData.ownershipType) {
-        throw new Error('Please select ownership type');
+        throw new Error('Ownership type is required');
       }
 
-      if (!formData.verificationNotes) {
-        throw new Error('Please provide verification notes');
+      // Validate period of stay
+      if (!formData.periodOfStay) {
+        throw new Error('Period of stay is required');
       }
 
-      if (!formData.gpsLat || !formData.gpsLng) {
-        throw new Error('GPS location is required');
+      // Validate all photos are captured
+      if (!photos.candidateSelfie) {
+        throw new Error('Candidate Selfie is required');
+      }
+      if (!photos.idProof) {
+        throw new Error('ID Proof is required');
+      }
+      if (!photos.houseDoorPhoto) {
+        throw new Error('House Door Photo is required');
       }
 
-      if (!files.candidateSelfie) {
-        throw new Error('Candidate selfie is required');
-      }
+      console.log('[Candidate] Submitting verification with photos:', photos);
 
-      if (!files.housePhoto) {
-        throw new Error('House photo is required');
-      }
-
-      if (!files.selfieWithHouse) {
-        throw new Error('Selfie with house is required');
-      }
-
-      if (!files.candidateSignature) {
-        throw new Error('Candidate signature is required');
-      }
-
-      // Upload images to ImageKit
-      console.log('[Candidate] Uploading images to ImageKit...');
-      
-      const [candidateSelfieUrl, housePhotoUrl, selfieWithHouseUrl, signatureUrl, documentUrls] = await Promise.all([
-        uploadToImageKit(files.candidateSelfie, 'candidate/selfies'),
-        uploadToImageKit(files.housePhoto, 'candidate/photos'),
-        uploadToImageKit(files.selfieWithHouse, 'candidate/selfies'),
-        uploadToImageKit(files.candidateSignature, 'candidate/signatures'),
-        files.documents.length > 0 ? uploadMultipleToImageKit(files.documents, 'candidate/documents') : Promise.resolve([])
-      ]);
-
-      console.log('[Candidate] All images uploaded to ImageKit successfully');
-
-      // Prepare form data with ImageKit URLs
-      const submitData = new FormData();
-      
-      // Add text fields
-      Object.keys(formData).forEach(key => {
-        if (formData[key]) {
-          submitData.append(key, formData[key]);
-        }
-      });
-
-      // Add ImageKit URLs
-      submitData.append('candidateSelfie', candidateSelfieUrl);
-      submitData.append('housePhoto', housePhotoUrl);
-      submitData.append('selfieWithHouse', selfieWithHouseUrl);
-      submitData.append('candidateSignature', signatureUrl);
-      if (documentUrls.length > 0) {
-        submitData.append('documents', JSON.stringify(documentUrls));
-      }
+      const submitData = {
+        candidateSelfieData: photos.candidateSelfie,
+        idProofData: photos.idProof,
+        houseDoorPhotoData: photos.houseDoorPhoto,
+        gpsLat: userLocation?.latitude || 0,
+        gpsLng: userLocation?.longitude || 0,
+        ownershipType: formData.ownershipType,
+        periodOfStay: formData.periodOfStay
+      };
 
       const response = await axios.post(
         `${config}/candidate/submit/${token}`,
         submitData,
         {
           headers: {
-            'Content-Type': 'multipart/form-data'
+            'Content-Type': 'application/json'
           }
         }
       );
@@ -344,17 +374,17 @@ const CandidateSubmissionPage = () => {
   }
 
   const expiryDate = tokenData?.expiresAt ? new Date(tokenData.expiresAt) : null;
-  const isExpiringSoon = expiryDate && (expiryDate - new Date()) < 3600000; // < 1 hour
+  const isExpiringSoon = expiryDate && (expiryDate - new Date()) < 3600000;
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
       <Paper elevation={3} sx={{ p: 3 }}>
         <Box sx={{ mb: 3 }}>
           <Typography variant="h4" gutterBottom>
-            Verification Submission
+            Photo Verification Submission
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Submit verification details for case {caseDetails?.caseNumber}
+            Submit verification photos for case {caseDetails?.caseNumber}
           </Typography>
         </Box>
 
@@ -371,8 +401,20 @@ const CandidateSubmissionPage = () => {
           </Alert>
         )}
 
+        {!locationPermission && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            Location permission not granted. Photos will be submitted without GPS coordinates. Please enable location services.
+          </Alert>
+        )}
+
+        {!cameraPermission && (
+          <Alert severity="warning" sx={{ mb: 3 }}>
+            Camera permission not granted. You can upload photos from your device instead.
+          </Alert>
+        )}
+
         {/* Case Details */}
-        <Card sx={{ mb: 3, bgcolor: 'grey.50' }}>
+        <Card sx={{ mb: 4, bgcolor: 'grey.50' }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
               Case Information
@@ -398,296 +440,187 @@ const CandidateSubmissionPage = () => {
           </CardContent>
         </Card>
 
-        {/* Submission Form */}
-        <form onSubmit={handleSubmit}>
-          <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
-            Address Details
-          </Typography>
-          <Divider sx={{ mb: 2 }} />
-
-          <Grid container spacing={2}>
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Address"
-                name="address"
-                value={formData.address}
-                onChange={handleInputChange}
-                required
-                disabled
-                multiline
-                rows={2}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                fullWidth
-                label="City"
-                name="city"
-                value={formData.city}
-                onChange={handleInputChange}
-                required
-                disabled
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                fullWidth
-                label="State"
-                name="state"
-                value={formData.state}
-                onChange={handleInputChange}
-                required
-                disabled
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                fullWidth
-                label="Pincode"
-                name="pincode"
-                value={formData.pincode}
-                onChange={handleInputChange}
-                required
-                disabled
-                inputProps={{ pattern: '[0-9]{6}', maxLength: 6 }}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                fullWidth
-                label="GPS Latitude"
-                name="gpsLat"
-                value={formData.gpsLat}
-                onChange={handleInputChange}
-                required
-                type="number"
-                inputProps={{ step: 'any' }}
-              />
-            </Grid>
-
-            <Grid item xs={6}>
-              <TextField
-                fullWidth
-                label="GPS Longitude"
-                name="gpsLng"
-                value={formData.gpsLng}
-                onChange={handleInputChange}
-                required
-                type="number"
-                inputProps={{ step: 'any' }}
-              />
-            </Grid>
-          </Grid>
-
-          <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-            Ownership Details
-          </Typography>
-          <Divider sx={{ mb: 2 }} />
-
-          <Grid container spacing={2}>
-            <Grid item xs={12}>
-              <FormControl fullWidth required sx={{ minWidth: 200 }}>
-                <InputLabel>Ownership Type</InputLabel>
-                <Select
-                  name="ownershipType"
-                  value={formData.ownershipType}
+        {/* Ownership Details */}
+        <Card sx={{ mb: 4 }}>
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Ownership Details
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12}>
+                <FormControl fullWidth required>
+                  <InputLabel>Ownership Type</InputLabel>
+                  <Select
+                    name="ownershipType"
+                    value={formData.ownershipType}
+                    onChange={handleInputChange}
+                    label="Ownership Type"
+                  >
+                    {ownershipTypes.map(type => (
+                      <MenuItem key={type} value={type}>
+                        {type.replace('_', ' ').toUpperCase()}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Period of Stay (e.g., 2 years, 6 months)"
+                  name="periodOfStay"
+                  value={formData.periodOfStay}
                   onChange={handleInputChange}
-                  label="Ownership Type"
-                >
-                  {ownershipTypes.map(type => (
-                    <MenuItem key={type} value={type}>
-                      {type.replace('_', ' ').toUpperCase()}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Period of Stay (e.g., 2 years, 6 months)"
-                name="periodOfStay"
-                value={formData.periodOfStay}
-                onChange={handleInputChange}
-                required
-                placeholder="Enter the period of stay at this address"
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <TextField
-                fullWidth
-                label="Verification Notes"
-                name="verificationNotes"
-                value={formData.verificationNotes}
-                onChange={handleInputChange}
-                required
-                multiline
-                rows={3}
-              />
-            </Grid>
-          </Grid>
-
-          <Typography variant="h6" gutterBottom sx={{ mt: 4 }}>
-            Upload Files
-          </Typography>
-          <Divider sx={{ mb: 2 }} />
-
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6}>
-              <Button
-                variant="outlined"
-                component="label"
-                fullWidth
-                color={files.candidateSelfie ? 'success' : 'primary'}
-              >
-                Candidate Selfie * {files.candidateSelfie && '✓'}
-                <input
-                  type="file"
-                  name="candidateSelfie"
-                  hidden
-                  accept="image/*"
-                  onChange={handleFileChange}
+                  required
+                  placeholder="Enter the period of stay at this address"
                 />
-              </Button>
+              </Grid>
             </Grid>
+          </CardContent>
+        </Card>
 
-            <Grid item xs={12} sm={6}>
-              <Button
-                variant="outlined"
-                component="label"
-                fullWidth
-                color={files.housePhoto ? 'success' : 'primary'}
-              >
-                Candidate House Photo * {files.housePhoto && '✓'}
-                <input
-                  type="file"
-                  name="housePhoto"
-                  hidden
-                  accept="image/*"
-                  onChange={handleFileChange}
-                />
-              </Button>
-            </Grid>
+        {/* Photo Upload Section */}
+        <Typography variant="h6" gutterBottom sx={{ mt: 3 }}>
+          Required Photos
+        </Typography>
+        <Divider sx={{ mb: 3 }} />
 
-            <Grid item xs={12} sm={6}>
-              <Button
-                variant="outlined"
-                component="label"
-                fullWidth
-                color={files.selfieWithHouse ? 'success' : 'primary'}
-              >
-                Candidate Selfie with House * {files.selfieWithHouse && '✓'}
-                <input
-                  type="file"
-                  name="selfieWithHouse"
-                  hidden
-                  accept="image/*"
-                  onChange={handleFileChange}
-                />
-              </Button>
-            </Grid>
-
-            <Grid item xs={12}>
-              <Button
-                variant="outlined"
-                component="label"
-                fullWidth
-                color={files.documents.length > 0 ? 'success' : 'secondary'}
-              >
-                Supporting Documents (if any) {files.documents.length > 0 && `(${files.documents.length})`}
-                <input
-                  type="file"
-                  name="documents"
-                  hidden
-                  accept="image/*,application/pdf"
-                  multiple
-                  onChange={handleFileChange}
-                />
-              </Button>
-            </Grid>
-
-            <Grid item xs={12}>
-              <Paper 
-                elevation={2} 
-                sx={{ 
-                  p: 2, 
-                  border: files.candidateSignature ? '2px solid #4caf50' : '2px dashed #ccc',
-                  borderRadius: 1 
+        <Grid container spacing={3}>
+          {Object.keys(photoLabels).map((photoType) => (
+            <Grid item xs={12} key={photoType}>
+              <Card
+                sx={{
+                  p: 2,
+                  border: photos[photoType] ? '2px solid #4caf50' : '2px dashed #ccc',
+                  borderRadius: 1,
+                  backgroundColor: photos[photoType] ? '#f1f5f0' : '#fafafa'
                 }}
               >
-                <Typography variant="subtitle1" gutterBottom>
-                  Candidate Signature * {files.candidateSignature && '✓'}
-                </Typography>
-                <Box
-                  sx={{
-                    border: '1px solid #ddd',
-                    borderRadius: 1,
-                    mb: 2,
-                    backgroundColor: '#fff',
-                    touchAction: 'none'
-                  }}
-                >
-                  <canvas
-                    ref={signatureCanvasRef}
-                    width={600}
-                    height={200}
-                    style={{ 
-                      width: '100%', 
-                      height: '200px',
-                      cursor: 'crosshair',
-                      display: 'block'
-                    }}
-                    onMouseDown={startDrawing}
-                    onMouseMove={draw}
-                    onMouseUp={stopDrawing}
-                    onMouseLeave={stopDrawing}
-                    onTouchStart={startDrawing}
-                    onTouchMove={draw}
-                    onTouchEnd={stopDrawing}
-                  />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                  <Box>
+                    <Typography variant="subtitle1">
+                      {photoLabels[photoType]} *
+                    </Typography>
+                    {photos[photoType] && (
+                      <Typography variant="caption" color="success.main">
+                        ✓ Uploaded - {new Date(photos[photoType].timestamp).toLocaleString()}
+                      </Typography>
+                    )}
+                  </Box>
                 </Box>
-                <Box sx={{ display: 'flex', gap: 1 }}>
+
+                {photos[photoType] ? (
+                  <Box sx={{ mb: 2 }}>
+                    <Box
+                      component="img"
+                      src={photos[photoType].url}
+                      sx={{
+                        width: '100%',
+                        maxHeight: 300,
+                        objectFit: 'cover',
+                        borderRadius: 1,
+                        mb: 2
+                      }}
+                    />
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      <strong>Latitude:</strong> {photos[photoType].latitude?.toFixed(6) || 'N/A'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                      <strong>Longitude:</strong> {photos[photoType].longitude?.toFixed(6) || 'N/A'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      <strong>Timestamp:</strong> {new Date(photos[photoType].timestamp).toLocaleString()}
+                    </Typography>
+                  </Box>
+                ) : null}
+
+                <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {cameraPermission && (
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={() => startCamera(photoType)}
+                      disabled={cameraActive}
+                    >
+                      📷 Take Photo
+                    </Button>
+                  )}
+
                   <Button
                     variant="outlined"
                     size="small"
-                    onClick={clearSignature}
-                    disabled={!hasSignature}
+                    onClick={() => fileInputRefs.current[photoType]?.click()}
                   >
-                    Clear
+                    📁 Choose File
                   </Button>
-                  <Button
-                    variant="contained"
-                    size="small"
-                    onClick={saveSignature}
-                    disabled={!hasSignature}
-                    color="success"
-                  >
-                    Save Signature
-                  </Button>
+                  <input
+                    ref={(el) => { if (el) fileInputRefs.current[photoType] = el; }}
+                    type="file"
+                    hidden
+                    accept="image/*"
+                    onChange={(e) => handleFileUpload(e, photoType)}
+                  />
                 </Box>
-              </Paper>
+              </Card>
             </Grid>
-          </Grid>
+          ))}
+        </Grid>
 
-          <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-            <Button
-              type="submit"
-              variant="contained"
-              size="large"
-              disabled={submitting}
-              sx={{ minWidth: 200 }}
-            >
-              {submitting ? <CircularProgress size={24} /> : 'Submit Verification'}
+        {/* Camera Dialog */}
+        <Dialog
+          open={cameraActive}
+          onClose={stopCamera}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            Capture {photoLabels[currentPhotoType]}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ position: 'relative', width: '100%' }}>
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                style={{
+                  width: '100%',
+                  borderRadius: '4px',
+                  marginBottom: '16px'
+                }}
+              />
+              <canvas
+                ref={canvasRef}
+                style={{ display: 'none' }}
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={stopCamera} variant="outlined">
+              Cancel
             </Button>
-          </Box>
-        </form>
+            <Button
+              onClick={capturePhoto}
+              variant="contained"
+              color="primary"
+            >
+              Capture Photo
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Submit Button */}
+        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+          <Button
+            type="submit"
+            variant="contained"
+            size="large"
+            disabled={submitting || !photos.candidateSelfie || !photos.idProof || !photos.houseDoorPhoto}
+            onClick={handleSubmit}
+            sx={{ minWidth: 250 }}
+          >
+            {submitting ? <CircularProgress size={24} /> : '✓ Submit Verification'}
+          </Button>
+        </Box>
       </Paper>
     </Container>
   );

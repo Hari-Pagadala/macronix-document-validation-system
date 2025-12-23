@@ -112,6 +112,26 @@ const Record = sequelize.define('Record', {
         allowNull: false
     }
     ,
+    gpsLat: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    gpsLng: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    submittedGpsLat: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    submittedGpsLng: {
+        type: DataTypes.STRING,
+        allowNull: true
+    },
+    gpsDistanceMeters: {
+        type: DataTypes.DOUBLE,
+        allowNull: true
+    },
     foVerification: {
         type: DataTypes.JSON,
         comment: 'Field Officer submission payload including respondent details, ownership, dates, comments, gps, signatures, file paths'

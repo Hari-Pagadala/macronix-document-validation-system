@@ -7,6 +7,7 @@ const Record = require('../models/Record_SQL');
 const Verification = require('../models/Verification_SQL');
 const FieldOfficer = require('../models/FieldOfficer_SQL');
 const Vendor = require('../models/Vendor_SQL');
+const { buildOpenStreetMapUrl } = require('../utils/mapUtils');
 
 // Helper to check if URL is ImageKit or local file
 const isImageKitUrl = (url) => {
@@ -399,13 +400,61 @@ const generateCasePDF = async (record, verification, vendorName, fieldOfficerNam
       doc.y = gpsStartY + 24 + 6;
       const gpsTableData = [
         ['Field', 'Value'],
-        ['Latitude', verification.gpsLat || 'N/A'],
-        ['Longitude', verification.gpsLng || 'N/A'],
+        ['Uploaded Latitude', record.gpsLat || 'N/A'],
+        ['Uploaded Longitude', record.gpsLng || 'N/A'],
+        ['Submitted Latitude', record.submittedGpsLat || verification.gpsLat || 'N/A'],
+        ['Submitted Longitude', record.submittedGpsLng || verification.gpsLng || 'N/A'],
+        ['Distance', record.gpsDistanceMeters ? `${(record.gpsDistanceMeters / 1000).toFixed(2)} km` : 'N/A'],
         ['Submitted At', verification.createdAt ? new Date(verification.createdAt).toLocaleString() : 'N/A'],
-        ['Action Status', verification.status || 'submitted'],
       ];
       drawTable(gpsTableData, [pageWidth / 3, (pageWidth * 2) / 3]);
-      doc.moveDown(1.5);
+      doc.moveDown(1);
+
+      // Add location comparison map if both GPS coordinates available
+      const uploadedLat = record.gpsLat;
+      const uploadedLng = record.gpsLng;
+      const submittedLat = record.submittedGpsLat || verification.gpsLat;
+      const submittedLng = record.submittedGpsLng || verification.gpsLng;
+
+      if (uploadedLat && uploadedLng && submittedLat && submittedLng) {
+        try {
+          const params = new URLSearchParams({
+            uploadedLat: String(uploadedLat),
+            uploadedLng: String(uploadedLng),
+            submittedLat: String(submittedLat),
+            submittedLng: String(submittedLng),
+            width: '600',
+            height: '250'
+          });
+          const localBase = `http://127.0.0.1:${process.env.PORT || 5000}`;
+          const mapUrl = `${localBase}/api/map/static?${params.toString()}`;
+          
+          if (mapUrl) {
+            console.log('[PDF] Adding location comparison map');
+            
+            // Add map section header with blue background
+            const mapSectionY = doc.y;
+            doc.save();
+            doc.rect(leftX, mapSectionY, pageWidth, 24).fill('#0f172a');
+            doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(12);
+            doc.text('Location Comparison Map', leftX + 10, mapSectionY + 6, { width: pageWidth - 20, align: 'left' });
+            doc.restore();
+            doc.y = mapSectionY + 30;
+            
+            // Add legend below header
+            doc.fontSize(8).fillColor('#6b7280').font('Helvetica');
+            doc.text('Red marker: Uploaded location | Green marker: Submitted location', leftX, doc.y);
+            doc.moveDown(0.5);
+            
+            // Fetch and embed map image
+            await addImageToDoc(doc, mapUrl, '', leftX, pageWidth, 250);
+            doc.moveDown(1);
+          }
+        } catch (mapErr) {
+          console.error('[PDF] Failed to add location map:', mapErr.message);
+          // Continue without map
+        }
+      }
 
       // Photos Section - Different labels for candidate vs FO submissions
       
@@ -413,34 +462,93 @@ const generateCasePDF = async (record, verification, vendorName, fieldOfficerNam
       const isCandidateSubmission = !verification.fieldOfficerId;
       
       if (isCandidateSubmission) {
-        // Candidate Submission Images
+        // Candidate Submission - Photo Only with Metadata
         
         // Candidate Selfie
-        if (verification.candidateWithRespondentPath) {
-          await addImageToDoc(doc, verification.candidateWithRespondentPath, 'Candidate Selfie', leftX, pageWidth);
-          console.log('[PDF] Candidate selfie image added');
+        if (verification.candidateSelfieData) {
+          const selfieData = typeof verification.candidateSelfieData === 'string' 
+            ? JSON.parse(verification.candidateSelfieData) 
+            : verification.candidateSelfieData;
+          
+          console.log('[PDF] Candidate selfie data:', selfieData);
+          
+          // Add section header with blue background
+          const selfieSectionY = doc.y;
+          doc.save();
+          doc.rect(leftX, selfieSectionY, pageWidth, 24).fill('#0f172a');
+          doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(12);
+          doc.text('Candidate Selfie', leftX + 10, selfieSectionY + 6, { width: pageWidth - 20, align: 'left' });
+          doc.restore();
+          doc.y = selfieSectionY + 30;
+          
+          // Add metadata below header
+          doc.fontSize(8).fillColor('#666').font('Helvetica');
+          doc.text(`Latitude: ${selfieData.latitude?.toFixed(6) || 'N/A'}`);
+          doc.text(`Longitude: ${selfieData.longitude?.toFixed(6) || 'N/A'}`);
+          doc.text(`Timestamp: ${new Date(selfieData.timestamp).toLocaleString()}`);
+          doc.moveDown(0.3);
+          
+          // Add image
+          await addImageToDoc(doc, selfieData.url, '', leftX, pageWidth);
+          doc.moveDown(0.5);
         }
         
-        // Candidate House Photo
-        const photos = verification.photos || [];
-        console.log('[PDF] Candidate house photos array:', photos);
-        for (let i = 0; i < photos.length; i++) {
-          console.log(`[PDF] Processing house photo ${i + 1}:`, photos[i]);
-          await addImageToDoc(doc, photos[i], `Candidate House Photo ${photos.length > 1 ? i + 1 : ''}`, leftX, pageWidth);
-          console.log(`[PDF] Candidate house photo ${i + 1} added`);
+        // ID Proof
+        if (verification.idProofData) {
+          const idData = typeof verification.idProofData === 'string' 
+            ? JSON.parse(verification.idProofData) 
+            : verification.idProofData;
+          
+          console.log('[PDF] ID proof data:', idData);
+          
+          // Add section header with blue background
+          const idSectionY = doc.y;
+          doc.save();
+          doc.rect(leftX, idSectionY, pageWidth, 24).fill('#0f172a');
+          doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(12);
+          doc.text('ID Proof', leftX + 10, idSectionY + 6, { width: pageWidth - 20, align: 'left' });
+          doc.restore();
+          doc.y = idSectionY + 30;
+          
+          // Add metadata below header
+          doc.fontSize(8).fillColor('#666').font('Helvetica');
+          doc.text(`Latitude: ${idData.latitude?.toFixed(6) || 'N/A'}`);
+          doc.text(`Longitude: ${idData.longitude?.toFixed(6) || 'N/A'}`);
+          doc.text(`Timestamp: ${new Date(idData.timestamp).toLocaleString()}`);
+          doc.moveDown(0.3);
+          
+          // Add image
+          await addImageToDoc(doc, idData.url, '', leftX, pageWidth);
+          doc.moveDown(0.5);
         }
         
-        // Candidate Selfie with House
-        if (verification.selfieWithHousePath) {
-          await addImageToDoc(doc, verification.selfieWithHousePath, 'Candidate Selfie with House', leftX, pageWidth);
-          console.log('[PDF] Candidate selfie with house image added');
-        }
-        
-        // Additional Documents
-        const docs = verification.documents || [];
-        for (let i = 0; i < docs.length; i++) {
-          await addImageToDoc(doc, docs[i], `Additional Document ${i + 1}`, leftX, pageWidth);
-          console.log(`[PDF] Additional document ${i + 1} added`);
+        // House Door Photo
+        if (verification.houseDoorPhotoData) {
+          const houseData = typeof verification.houseDoorPhotoData === 'string' 
+            ? JSON.parse(verification.houseDoorPhotoData) 
+            : verification.houseDoorPhotoData;
+          
+          console.log('[PDF] House door photo data:', houseData);
+          
+          // Add section header with blue background
+          const houseSectionY = doc.y;
+          doc.save();
+          doc.rect(leftX, houseSectionY, pageWidth, 24).fill('#0f172a');
+          doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(12);
+          doc.text('House Door Photo', leftX + 10, houseSectionY + 6, { width: pageWidth - 20, align: 'left' });
+          doc.restore();
+          doc.y = houseSectionY + 30;
+          
+          // Add metadata below header
+          doc.fontSize(8).fillColor('#666').font('Helvetica');
+          doc.text(`Latitude: ${houseData.latitude?.toFixed(6) || 'N/A'}`);
+          doc.text(`Longitude: ${houseData.longitude?.toFixed(6) || 'N/A'}`);
+          doc.text(`Timestamp: ${new Date(houseData.timestamp).toLocaleString()}`);
+          doc.moveDown(0.3);
+          
+          // Add image
+          await addImageToDoc(doc, houseData.url, '', leftX, pageWidth);
+          doc.moveDown(0.5);
         }
       } else {
         // Field Officer Submission Images
@@ -472,53 +580,25 @@ const generateCasePDF = async (record, verification, vendorName, fieldOfficerNam
         }
       }
 
-      // Signatures Section - Different layout for candidate vs FO submissions
-      if (doc.y > doc.page.height - 180) {
-        doc.addPage();
-      }
-
-      // Add section title for signatures
-      const sigSectionY = doc.y;
-      doc.save();
-      doc.rect(leftX, sigSectionY, pageWidth, 24).fill('#0f172a');
-      doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(12);
-      doc.text('Signatures', leftX + 10, sigSectionY + 6, { width: pageWidth - 20, align: 'left' });
-      doc.restore();
-      doc.y = sigSectionY + 30;
-
-      const sigWidth = 200;
-      const sigHeight = 100;
-      const sigY = doc.y;
-
-      if (isCandidateSubmission) {
-        // Candidate submission - show only candidate signature (centered)
-        const sigX = leftX + (pageWidth - sigWidth) / 2;
-        
-        doc.fontSize(10).fillColor('#374151').text('Candidate Signature', sigX, sigY);
-        doc.rect(sigX, sigY + 20, sigWidth, sigHeight).stroke('#d1d5db');
-        
-        if (verification.officerSignaturePath) {
-          try {
-            const sigBuffer = await fetchImage(verification.officerSignaturePath);
-            if (sigBuffer) {
-              try {
-                const testImg = doc.openImage(sigBuffer);
-                doc.image(sigBuffer, sigX + 10, sigY + 30, { fit: [sigWidth - 20, sigHeight - 20] });
-              } catch (imgError) {
-                console.error('[PDF] Corrupted candidate signature:', verification.officerSignaturePath, imgError.message);
-                doc.fontSize(9).fillColor('#ef4444').text('Corrupted Image', sigX + 55, sigY + 60);
-              }
-            } else {
-              doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sigX + 60, sigY + 60);
-            }
-          } catch (e) {
-            console.error('[PDF] Error adding candidate signature:', e.message);
-            doc.fontSize(9).fillColor('#ef4444').text('Error Loading', sigX + 55, sigY + 60);
-          }
-        } else {
-          doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sigX + 60, sigY + 60);
+      // Signatures Section - Only show for Field Officer submissions
+      if (!isCandidateSubmission) {
+        if (doc.y > doc.page.height - 180) {
+          doc.addPage();
         }
-      } else {
+
+        // Add section title for signatures
+        const sigSectionY = doc.y;
+        doc.save();
+        doc.rect(leftX, sigSectionY, pageWidth, 24).fill('#0f172a');
+        doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(12);
+        doc.text('Signatures', leftX + 10, sigSectionY + 6, { width: pageWidth - 20, align: 'left' });
+        doc.restore();
+        doc.y = sigSectionY + 30;
+
+        const sigWidth = 200;
+        const sigHeight = 100;
+        const sigY = doc.y;
+
         // Field Officer submission - show both signatures side by side
         const sig1X = leftX + 40;
         const sig2X = leftX + pageWidth - sigWidth - 40;
@@ -574,9 +654,9 @@ const generateCasePDF = async (record, verification, vendorName, fieldOfficerNam
         } else {
           doc.fontSize(9).fillColor('#6b7280').text('Not Provided', sig2X + 60, sigY + 60);
         }
-      }
 
-      doc.y = sigY + sigHeight + 40;
+        doc.y = sigY + sigHeight + 40;
+      }
 
       // Finalize PDF
       doc.end();

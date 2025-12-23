@@ -61,6 +61,7 @@ const foPortalRoutes = require('./routes/foPortalRoutes');
 const reportRoutes = require('./routes/reportRoutes');
 const downloadRoutes = require('./routes/downloadRoutes');
 const candidateRoutes = require('./routes/candidateRoutes');
+const mapRoutes = require('./routes/mapRoutes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/records', recordRoutes);
@@ -71,6 +72,7 @@ app.use('/api/fo-portal', foPortalRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/candidate', candidateRoutes); // Public routes for candidate submission
+app.use('/api/map', mapRoutes); // Static map image service
 
 // Health check endpoints
 app.get('/', (req, res) => {
@@ -119,5 +121,5 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Server running on http://0.0.0.0:${PORT} (accessible at http://192.168.29.228:${PORT})`);
+    console.log(`🚀 Server running on http://0.0.0.0:${PORT} (accessible at http://192.168.1.16:${PORT})`);
 });

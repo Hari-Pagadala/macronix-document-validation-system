@@ -65,6 +65,34 @@ const CandidateToken = sequelize.define('CandidateToken', {
     type: DataTypes.STRING,
     allowNull: true,
     comment: 'IP address used for submission'
+  },
+  emailStatus: {
+    type: DataTypes.ENUM('SENT', 'FAILED', 'NOT_SENT'),
+    defaultValue: 'NOT_SENT'
+  },
+  emailSentAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Timestamp when email was sent'
+  },
+  emailError: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'Email sending error message if failed'
+  },
+  smsStatus: {
+    type: DataTypes.ENUM('SENT', 'FAILED', 'NOT_SENT'),
+    defaultValue: 'NOT_SENT'
+  },
+  smsSentAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    comment: 'Timestamp when SMS was sent'
+  },
+  smsError: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'SMS sending error message if failed'
   }
 }, {
   tableName: 'candidate_tokens',
