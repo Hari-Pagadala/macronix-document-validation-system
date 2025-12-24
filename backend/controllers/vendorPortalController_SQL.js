@@ -421,6 +421,7 @@ exports.assignToCandidate = async (req, res) => {
                 caseNumber: record.caseNumber,
                 referenceNumber: record.referenceNumber,
                 submissionLink,
+                recordId: record.id,
                 expiresAt: candidateToken.expiresAt
             }, {
                 sendEmail,

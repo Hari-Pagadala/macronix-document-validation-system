@@ -381,7 +381,7 @@ const CandidateSubmissionPage = () => {
       <Paper elevation={3} sx={{ p: 3 }}>
         <Box sx={{ mb: 3 }}>
           <Typography variant="h4" gutterBottom>
-            Photo Verification Submission
+            Submit Verification
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Submit verification photos for case {caseDetails?.caseNumber}

@@ -10,11 +10,12 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
+import PasswordField from '../components/PasswordField';
 import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
-  const [email, setEmail] = useState('purna@macronix.com');
-  const [password, setPassword] = useState('December@2025');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
@@ -66,7 +67,7 @@ const Login = () => {
             </Alert>
           )}
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} autoComplete="off">
             <TextField
               fullWidth
               label="Email"
@@ -76,16 +77,19 @@ const Login = () => {
               margin="normal"
               required
               disabled={loading}
+              name="email"
+              autoComplete="off"
             />
-            <TextField
-              fullWidth
+            <PasswordField
               label="Password"
-              type="password"
+              name="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              margin="normal"
               required
               disabled={loading}
+              autoComplete="off"
+              email={email}
+              showValidation={false}
             />
             <Button
               fullWidth

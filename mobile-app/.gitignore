@@ -1,14 +1,49 @@
+# Dependencies
 node_modules/
-.expo/
-dist/
 npm-debug.*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Expo
+.expo/
+.expo-shared/
+dist/
+web-build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Native builds
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
 *.orig.*
-web-build/
-.env.local
-.env.*.local
+android/app/build/
+ios/Pods/
+ios/build/
+
+# OS specific
 .DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+*.tmp
+tmp/
+temp/

@@ -27,7 +27,9 @@ const PasswordField = ({
   email = "",
   editMode = false,
   showValidation = true,
-  onValidityChange
+  onValidityChange,
+  disabled = false,
+  autoComplete = "off"
 }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [validation, setValidation] = useState({
@@ -102,7 +104,9 @@ const PasswordField = ({
         onChange={onChange}
         required={required}
         helperText={helperText}
+        disabled={disabled}
         error={value && !isPasswordValid()}
+        autoComplete={autoComplete}
         InputProps={{
           endAdornment: (
             <InputAdornment position="end">

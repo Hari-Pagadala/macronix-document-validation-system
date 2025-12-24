@@ -9,6 +9,7 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
+import PasswordField from '../components/PasswordField';
 import { Business as BusinessIcon } from '@mui/icons-material';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -86,17 +87,19 @@ const VendorLogin = () => {
             autoComplete="email"
           />
           
-          <TextField
-            fullWidth
-            label="Password"
-            name="password"
-            type="password"
-            value={formData.password}
-            onChange={handleChange}
-            required
-            sx={{ mb: 3 }}
-            autoComplete="current-password"
-          />
+          <Box sx={{ mb: 3 }}>
+            <PasswordField
+              label="Password"
+              name="password"
+              value={formData.password}
+              onChange={handleChange}
+              required
+              disabled={loading}
+              autoComplete="current-password"
+              email={formData.email}
+              showValidation={false}
+            />
+          </Box>
 
           <Button
             fullWidth

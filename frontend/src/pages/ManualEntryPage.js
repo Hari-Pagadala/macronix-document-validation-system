@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Box,
@@ -87,6 +87,8 @@ const ManualEntryPage = () => {
     const [error, setError] = useState('');
     const [generatedRef, setGeneratedRef] = useState('');
     const [errors, setErrors] = useState({});
+    const [checkingCase, setCheckingCase] = useState(false);
+    const caseCheckTimer = useRef(null);
 
     const handleMenuOpen = (event) => setAnchorEl(event.currentTarget);
     const handleMenuClose = () => setAnchorEl(null);
@@ -136,6 +138,49 @@ const ManualEntryPage = () => {
         setErrors(prev => ({ ...prev, [name]: fieldError }));
     };
 
+    // Debounced duplicate check for Case Number on change
+    useEffect(() => {
+        // Clear previous timer
+        if (caseCheckTimer.current) {
+            clearTimeout(caseCheckTimer.current);
+        }
+
+        const c = (formData.caseNumber || '').toString().trim();
+        if (!c) {
+            // Clear error if field is empty
+            setErrors(prev => ({ ...prev, caseNumber: '' }));
+            setCheckingCase(false);
+            return;
+        }
+
+        // Start debounce
+        caseCheckTimer.current = setTimeout(async () => {
+            setCheckingCase(true);
+            try {
+                const token = localStorage.getItem('token');
+                const resp = await axios.get(`${API_BASE_URL}/records`, {
+                    params: { search: c, limit: 1 },
+                    headers: token ? { Authorization: `Bearer ${token}` } : {}
+                });
+                const found = (resp.data?.records || []).some((r) => (r.caseNumber || '').toString() === c);
+                setErrors(prev => ({
+                    ...prev,
+                    caseNumber: found ? 'Case Number already exists in system' : ''
+                }));
+            } catch (err) {
+                // Network/authorization issues: don't block typing, server will revalidate on submit
+            } finally {
+                setCheckingCase(false);
+            }
+        }, 400); // 400ms debounce
+
+        return () => {
+            if (caseCheckTimer.current) {
+                clearTimeout(caseCheckTimer.current);
+            }
+        };
+    }, [formData.caseNumber]);
+
     const handleReset = (clearMessages = true) => {
         setFormData({
             caseNumber: '',
@@ -176,7 +221,7 @@ const ManualEntryPage = () => {
             newErrors.pincode = 'Must be 6 digits';
         }
 
-        if (Object.keys(newErrors).length > 0) {
+        if (Object.keys(newErrors).length > 0 || errors.caseNumber) {
             setErrors(newErrors);
             setError('Please fix all errors');
             return;
@@ -270,7 +315,7 @@ const ManualEntryPage = () => {
                                         value={formData.caseNumber}
                                         onChange={handleInputChange}
                                         error={!!errors.caseNumber}
-                                        helperText={errors.caseNumber}
+                                        helperText={checkingCase && !errors.caseNumber ? 'Checking…' : errors.caseNumber}
                                         size="small"
                                     />
                                 </Grid>

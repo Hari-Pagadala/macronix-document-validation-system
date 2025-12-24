@@ -1,0 +1,11 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <!-- Red curved section (top-right) -->
+  <path d="M 100 20 A 80 80 0 0 1 160 160 A 60 60 0 0 1 100 160 A 60 60 0 0 1 100 20" fill="#E63946" stroke="none"/>
+  
+  <!-- Blue curved sections (bottom-left) -->
+  <path d="M 100 40 A 60 60 0 0 0 70 140 A 40 40 0 0 0 100 160 A 40 40 0 0 0 100 40" fill="#1D3557" stroke="none"/>
+  <path d="M 100 60 A 40 40 0 0 0 85 130 A 20 20 0 0 0 100 145 A 20 20 0 0 0 100 60" fill="#457B9D" stroke="none"/>
+  
+  <!-- Center white circle -->
+  <circle cx="100" cy="100" r="35" fill="#FFFFFF" stroke="none"/>
+</svg>

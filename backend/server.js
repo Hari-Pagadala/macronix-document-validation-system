@@ -62,6 +62,7 @@ const reportRoutes = require('./routes/reportRoutes');
 const downloadRoutes = require('./routes/downloadRoutes');
 const candidateRoutes = require('./routes/candidateRoutes');
 const mapRoutes = require('./routes/mapRoutes');
+const shortLinkRoutes = require('./routes/shortLink');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/records', recordRoutes);
@@ -73,6 +74,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/candidate', candidateRoutes); // Public routes for candidate submission
 app.use('/api/map', mapRoutes); // Static map image service
+app.use('/c', shortLinkRoutes); // Short link redirects
 
 // Health check endpoints
 app.get('/', (req, res) => {

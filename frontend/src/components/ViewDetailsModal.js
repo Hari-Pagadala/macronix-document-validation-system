@@ -13,7 +13,9 @@ import {
   Alert,
   Divider,
   TextField,
-  IconButton
+  IconButton,
+  Checkbox,
+  FormControlLabel
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -99,7 +101,7 @@ const buildStaticMapUrl = (lat1, lng1, lat2, lng2) => {
 };
 
 const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [record, setRecord] = useState(null);
   const [loading, setLoading] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -130,6 +132,12 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
   const [panning, setPanning] = useState(false);
   const panStartRef = React.useRef({ x: 0, y: 0 });
   const offsetStartRef = React.useRef({ x: 0, y: 0 });
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendMessage, setResendMessage] = useState('');
+  const [resendError, setResendError] = useState('');
+  const [resendEmail, setResendEmail] = useState(true);
+  const [resendSMS, setResendSMS] = useState(true);
+  const isSuperAdmin = (user?.role || '').toLowerCase() === 'super_admin';
 
   const uploadedLat = record?.gpsLat;
   const uploadedLng = record?.gpsLng;
@@ -223,6 +231,36 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
     } catch (err) {
       // No link available
       setCandidateLink(null);
+    }
+  };
+
+  const handleResendLink = async () => {
+    if (!recordId) return;
+    setResendMessage('');
+    setResendError('');
+    setResendLoading(true);
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/records/${recordId}/resend-candidate-link`,
+        {
+          sendEmail: resendEmail,
+          sendSMS: resendSMS,
+          expiryHours: 72
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (response.data?.success) {
+        setResendMessage('New link sent successfully. New token generated and old link invalidated.');
+        // Refresh displayed link to new one
+        setCandidateLink(response.data.submissionLink || candidateLink);
+      } else {
+        setResendError(response.data?.message || 'Failed to resend link');
+      }
+    } catch (err) {
+      setResendError(err.response?.data?.message || 'Failed to resend link');
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -636,17 +674,62 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                     {candidateLink}
                   </Typography>
                 </Box>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    navigator.clipboard.writeText(candidateLink);
-                    alert('Link copied to clipboard!');
-                  }}
-                  sx={{ textTransform: 'none' }}
-                >
-                  Copy Link
-                </Button>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => {
+                      navigator.clipboard.writeText(candidateLink);
+                      alert('Link copied to clipboard!');
+                    }}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Copy Link
+                  </Button>
+                  {isSuperAdmin && (
+                    <>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={resendEmail}
+                            onChange={(e) => setResendEmail(e.target.checked)}
+                            size="small"
+                          />
+                        }
+                        label="Email"
+                      />
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={resendSMS}
+                            onChange={(e) => setResendSMS(e.target.checked)}
+                            size="small"
+                          />
+                        }
+                        label="SMS"
+                      />
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={handleResendLink}
+                        disabled={resendLoading || (!resendEmail && !resendSMS)}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        {resendLoading ? 'Sending...' : 'Resend Link'}
+                      </Button>
+                    </>
+                  )}
+                </Box>
+                {isSuperAdmin && (resendMessage || resendError) && (
+                  <Alert severity={resendError ? 'error' : 'success'} sx={{ mb: 1 }}>
+                    {resendError || resendMessage}
+                  </Alert>
+                )}
+                {isSuperAdmin && (
+                  <Typography variant="caption" color="text.secondary">
+                    Resend creates a new token and invalidates the previous link. Expiry: 72 hours.
+                  </Typography>
+                )}
               </Paper>
             )}
 

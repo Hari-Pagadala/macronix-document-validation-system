@@ -1,0 +1,52 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# Uploads and temporary files
+uploads/
+temp/
+tmp/
+*.tmp
+
+# OS specific
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Test files
+coverage/
+.nyc_output/
+
+# Build outputs
+dist/
+build/
+
+# PDF test outputs
+test-output.pdf
+*.test.pdf
