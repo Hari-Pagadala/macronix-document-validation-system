@@ -163,6 +163,7 @@ const DownloadReportsDialog = ({ open, onClose }) => {
               <MenuItem value="pending">Pending</MenuItem>
               <MenuItem value="assigned">Assigned</MenuItem>
               <MenuItem value="submitted">Submitted</MenuItem>
+              <MenuItem value="late_submission">Late Submission</MenuItem>
               <MenuItem value="approved">Approved</MenuItem>
               <MenuItem value="insufficient">Insufficient</MenuItem>
               <MenuItem value="rejected">Rejected</MenuItem>

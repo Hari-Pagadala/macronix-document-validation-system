@@ -77,6 +77,14 @@ const Record = sequelize.define('Record', {
     completionDate: {
         type: DataTypes.DATE
     },
+    submittedAt: {
+        type: DataTypes.DATE,
+        comment: 'Server-side timestamp when submission was received'
+    },
+    isLateSubmission: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+    },
     uploadedDate: {
         type: DataTypes.DATE,
         defaultValue: DataTypes.NOW

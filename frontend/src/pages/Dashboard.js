@@ -113,7 +113,7 @@ const Dashboard = () => {
     setSideNavOpen(false);
   };
 
-  const tabStatusMap = ['all', 'pending', 'vendor_assigned', 'candidate_assigned', 'candidate_overdue', 'assigned', 'submitted', 'approved', 'insufficient', 'rejected', 'stopped'];
+  const tabStatusMap = ['all', 'pending', 'vendor_assigned', 'candidate_assigned', 'candidate_overdue', 'assigned', 'submitted', 'late_submission', 'approved', 'insufficient', 'rejected', 'stopped'];
 
   const renderContent = () => {
     switch (activeSection) {
@@ -214,6 +214,18 @@ const Dashboard = () => {
                 <Grid item xs={6} sm={4} md={2.4}>
                   <Card>
                     <CardContent>
+                      <Typography variant="h5" align="center" color="error.main">
+                        {stats.lateSubmissionRecords || 0}
+                      </Typography>
+                      <Typography variant="body2" align="center" color="text.secondary">
+                        Late Submissions
+                      </Typography>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={6} sm={4} md={2.4}>
+                  <Card>
+                    <CardContent>
                       <Typography variant="h5" align="center" color="success.main">
                         {stats.approvedRecords || 0}
                       </Typography>
@@ -287,6 +299,7 @@ const Dashboard = () => {
                 <Tab label="Candidate Overdue" />
                 <Tab label="Assigned" />
                 <Tab label="Submitted" />
+                <Tab label="Late Submissions" />
                 <Tab label="Approved" />
                 <Tab label="Insufficient" />
                 <Tab label="Rejected" />

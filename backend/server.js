@@ -8,6 +8,20 @@ dotenv.config();
 
 const app = express();
 
+// Process-level diagnostics to capture unexpected exits
+process.on('uncaughtException', (err) => {
+    console.error('💥 Uncaught Exception:', err && err.stack ? err.stack : err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('💥 Unhandled Rejection:', reason);
+});
+process.on('exit', (code) => {
+    console.log(`👋 Process exiting with code ${code}`);
+});
+process.on('SIGINT', () => {
+    console.log('🛑 Received SIGINT');
+});
+
 // Request logging middleware
 app.use((req, res, next) => {
     const timestamp = new Date().toISOString();

@@ -129,6 +129,7 @@ const VendorDownloadReportsDialog = ({ open, onClose }) => {
               <MenuItem value="vendor_assigned">Vendor Assigned</MenuItem>
               <MenuItem value="assigned">Assigned to FO</MenuItem>
               <MenuItem value="submitted">Submitted</MenuItem>
+              <MenuItem value="late_submission">Late Submission</MenuItem>
               <MenuItem value="approved">Approved</MenuItem>
               <MenuItem value="insufficient">Insufficient</MenuItem>
               <MenuItem value="rejected">Rejected</MenuItem>

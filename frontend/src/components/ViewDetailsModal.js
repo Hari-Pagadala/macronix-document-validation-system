@@ -15,7 +15,8 @@ import {
   TextField,
   IconButton,
   Checkbox,
-  FormControlLabel
+  FormControlLabel,
+  Chip
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -655,6 +656,32 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                     <Typography variant="body2" sx={{ color: '#333' }}>
                       {formatDate(record.tatDueDate)}
                     </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+              <Box sx={{ py: 1.5 }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={5}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666' }}>
+                      Submitted Date
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={7}>
+                    <Typography variant="body2" sx={{ color: '#333' }}>
+                      {formatDate(record.submittedAt)}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+              <Box sx={{ py: 1.5 }}>
+                <Grid container spacing={2}>
+                  <Grid item xs={5}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: '#666' }}>
+                      Late Submission
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={7}>
+                    <Chip label={record.isLateSubmission ? 'Late' : 'On Time'} color={record.isLateSubmission ? 'error' : 'success'} size="small" />
                   </Grid>
                 </Grid>
               </Box>

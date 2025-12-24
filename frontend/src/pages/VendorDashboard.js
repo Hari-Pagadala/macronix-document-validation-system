@@ -25,7 +25,8 @@ import {
   Cancel,
   Warning,
   Stop,
-  Download
+  Download,
+  AccessTime
 } from '@mui/icons-material';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -84,7 +85,7 @@ const VendorDashboard = () => {
     navigate('/vendor/login');
   };
 
-  const tabStatusMap = ['all', 'vendor_assigned', 'assigned', 'submitted', 'approved', 'insufficient', 'rejected', 'stopped'];
+  const tabStatusMap = ['all', 'vendor_assigned', 'assigned', 'submitted', 'late_submission', 'approved', 'insufficient', 'rejected', 'stopped'];
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
@@ -162,8 +163,19 @@ const VendorDashboard = () => {
                 </Card>
               </Grid>
 
-              <Grid item xs={12} sm={6} md={3}>
-                <Card>
+              <Grid item xs={12} sm={6} md={3}>                <Card>
+                  <CardContent>
+                    <Typography variant="h4" align="center" sx={{ color: '#d32f2f' }}>
+                      {stats.lateSubmissionCases || 0}
+                    </Typography>
+                    <Typography variant="body2" align="center" color="text.secondary">
+                      Late Submission
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              <Grid item xs={12} sm={6} md={3}>                <Card>
                   <CardContent>
                     <Typography variant="h4" align="center" color="success.main">
                       {stats.approvedCases || 0}
@@ -226,6 +238,7 @@ const VendorDashboard = () => {
                 <Tab label="Vendor Assigned" />
                 <Tab label="Assigned to FO" />
                 <Tab label="Submitted" />
+                <Tab label="Late Submissions" />
                 <Tab label="Approved" />
                 <Tab label="Insufficient" />
                 <Tab label="Rejected" />

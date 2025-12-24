@@ -8,6 +8,7 @@ const { Op } = require('sequelize');
 exports.downloadCasesReport = async (req, res) => {
     try {
         const { vendor, status, fromDate, toDate } = req.query;
+        console.log('[Admin Report] Download request:', { vendor, status, fromDate, toDate });
         
         // Build where clause based on filters
         const where = {};
@@ -17,24 +18,35 @@ exports.downloadCasesReport = async (req, res) => {
             where.assignedVendor = vendor;
         }
         
-        // Status filter
+        // Status filter (support special pseudo-status for late submissions)
         if (status && status !== 'all') {
-            where.status = status;
+            if (status === 'late_submission') {
+                where.isLateSubmission = true;
+                console.log('[Admin Report] Filtering by late submissions');
+            } else {
+                where.status = status;
+                console.log('[Admin Report] Filtering by status:', status);
+            }
         }
         
-        // Date range filter (using createdAt)
+        // Date range filter (using updatedAt - when status was last changed)
         if (fromDate || toDate) {
-            where.createdAt = {};
+            where.updatedAt = {};
             if (fromDate) {
-                where.createdAt[Op.gte] = new Date(fromDate);
+                const startDate = new Date(fromDate + 'T00:00:00Z');
+                where.updatedAt[Op.gte] = startDate;
+                console.log('[Admin Report] Start date:', startDate);
             }
             if (toDate) {
                 // Add 1 day to include the entire toDate
-                const endDate = new Date(toDate);
+                const endDate = new Date(toDate + 'T23:59:59Z');
                 endDate.setDate(endDate.getDate() + 1);
-                where.createdAt[Op.lt] = endDate;
+                where.updatedAt[Op.lt] = endDate;
+                console.log('[Admin Report] End date:', endDate);
             }
         }
+        
+        console.log('[Admin Report] Query where clause:', JSON.stringify(where, null, 2));
         
         // Fetch records with filters
         const records = await Record.findAll({
@@ -42,6 +54,8 @@ exports.downloadCasesReport = async (req, res) => {
             order: [['createdAt', 'DESC']],
             raw: true
         });
+        
+        console.log('[Admin Report] Found records:', records.length);
         
         if (records.length === 0) {
             return res.status(404).json({
@@ -74,7 +88,14 @@ exports.downloadCasesReport = async (req, res) => {
         fieldOfficers.forEach(fo => { foMap[fo.id] = fo.name; });
         
         // Format data for Excel
-        const excelData = records.map(record => ({
+        const excelData = records.map(record => {
+            const submittedAt = record.submittedAt ? new Date(record.submittedAt) : null;
+            const tatDue = record.tatDueDate ? new Date(record.tatDueDate) : null;
+            const delayMs = submittedAt && tatDue ? submittedAt - tatDue : 0;
+            const delayHours = delayMs > 0 ? Math.floor(delayMs / (1000 * 60 * 60)) : 0;
+            const delayLabel = delayMs > 0 ? `${delayHours}h` : '0h';
+
+            return {
             'Case Number': record.caseNumber || 'N/A',
             'MACRONIX Reference': record.referenceNumber || 'N/A',
             'Customer Name': record.fullName || 'N/A',
@@ -84,8 +105,11 @@ exports.downloadCasesReport = async (req, res) => {
             'Location': record.address || 'N/A',
             'Status': record.status || 'N/A',
             'Case Created Date': record.createdAt ? new Date(record.createdAt).toLocaleDateString('en-GB') : 'N/A',
-            'Case Completed Date': record.completionDate ? new Date(record.completionDate).toLocaleDateString('en-GB') : 'N/A'
-        }));
+            'Case Completed Date': record.completionDate ? new Date(record.completionDate).toLocaleDateString('en-GB') : 'N/A',
+            'Late Submission': record.isLateSubmission ? 'Yes' : 'No',
+            'Delay Duration (hours)': delayLabel
+        };
+        });
         
         // Create workbook and worksheet
         const workbook = xlsx.utils.book_new();
@@ -120,10 +144,12 @@ exports.downloadCasesReport = async (req, res) => {
         res.send(buffer);
         
     } catch (error) {
-        console.error('Error generating report:', error);
+        console.error('[Admin Report] Error generating report:', error.message);
+        console.error('[Admin Report] Stack:', error.stack);
         res.status(500).json({
             success: false,
-            message: 'Server error generating report'
+            message: 'Server error generating report',
+            error: error.message
         });
     }
 };
@@ -139,21 +165,26 @@ exports.downloadVendorCasesReport = async (req, res) => {
         // Build where clause
         const where = { assignedVendor: vendorId };
         
-        // Status filter
+        // Status filter (support late submissions pseudo-status)
         if (status && status !== 'all') {
-            where.status = status;
+            if (status === 'late_submission') {
+                where.isLateSubmission = true;
+            } else {
+                where.status = status;
+            }
         }
         
-        // Date range filter
+        // Date range filter (using updatedAt - when status was last changed)
         if (fromDate || toDate) {
-            where.createdAt = {};
+            where.updatedAt = {};
             if (fromDate) {
-                where.createdAt[Op.gte] = new Date(fromDate);
+                const startDate = new Date(fromDate + 'T00:00:00Z');
+                where.updatedAt[Op.gte] = startDate;
             }
             if (toDate) {
-                const endDate = new Date(toDate);
+                const endDate = new Date(toDate + 'T23:59:59Z');
                 endDate.setDate(endDate.getDate() + 1);
-                where.createdAt[Op.lt] = endDate;
+                where.updatedAt[Op.lt] = endDate;
             }
         }
         
@@ -189,7 +220,14 @@ exports.downloadVendorCasesReport = async (req, res) => {
         fieldOfficers.forEach(fo => { foMap[fo.id] = fo.name; });
         
         // Format data for Excel
-        const excelData = records.map(record => ({
+        const excelData = records.map(record => {
+            const submittedAt = record.submittedAt ? new Date(record.submittedAt) : null;
+            const tatDue = record.tatDueDate ? new Date(record.tatDueDate) : null;
+            const delayMs = submittedAt && tatDue ? submittedAt - tatDue : 0;
+            const delayHours = delayMs > 0 ? Math.floor(delayMs / (1000 * 60 * 60)) : 0;
+            const delayLabel = delayMs > 0 ? `${delayHours}h` : '0h';
+
+            return {
             'Case Number': record.caseNumber || 'N/A',
             'MACRONIX Reference': record.referenceNumber || 'N/A',
             'Customer Name': record.fullName || 'N/A',
@@ -199,8 +237,11 @@ exports.downloadVendorCasesReport = async (req, res) => {
             'Location': record.address || 'N/A',
             'Status': record.status || 'N/A',
             'Case Created Date': record.createdAt ? new Date(record.createdAt).toLocaleDateString('en-GB') : 'N/A',
-            'Case Completed Date': record.completionDate ? new Date(record.completionDate).toLocaleDateString('en-GB') : 'N/A'
-        }));
+            'Case Completed Date': record.completionDate ? new Date(record.completionDate).toLocaleDateString('en-GB') : 'N/A',
+            'Late Submission': record.isLateSubmission ? 'Yes' : 'No',
+            'Delay Duration (hours)': delayLabel
+        };
+        });
         
         // Create workbook
         const workbook = xlsx.utils.book_new();
@@ -222,10 +263,12 @@ exports.downloadVendorCasesReport = async (req, res) => {
         res.send(buffer);
         
     } catch (error) {
-        console.error('Error generating vendor report:', error);
+        console.error('[Vendor Report] Error generating report:', error.message);
+        console.error('[Vendor Report] Stack:', error.stack);
         res.status(500).json({
             success: false,
-            message: 'Server error generating report'
+            message: 'Server error generating report',
+            error: error.message
         });
     }
 };

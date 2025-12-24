@@ -289,6 +289,11 @@ const VendorCasesTable = ({ status = 'all', onUpdate }) => {
                             size="small"
                             variant="outlined"
                           />
+                          {record.isLateSubmission && (
+                            <Box sx={{ mt: 0.5 }}>
+                              <Chip label="Late" color="error" size="small" />
+                            </Box>
+                          )}
                           {(vendorName || fieldOfficerName) && (
                             <Box sx={{ mt: 0.5, display: 'flex', flexDirection: 'column', gap: 0.25 }}>
                              

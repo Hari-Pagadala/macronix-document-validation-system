@@ -71,6 +71,13 @@ exports.getVendorDashboardStats = async (req, res) => {
             } 
         });
         
+        const lateSubmissionCases = await Record.count({ 
+            where: { 
+                assignedVendor: vendorId,
+                isLateSubmission: true
+            } 
+        });
+        
         res.json({
             success: true,
             stats: {
@@ -82,7 +89,8 @@ exports.getVendorDashboardStats = async (req, res) => {
                 approvedCases,
                 rejectedCases,
                 insufficientCases,
-                stoppedCases
+                stoppedCases,
+                lateSubmissionCases
             }
         });
     } catch (error) {
@@ -106,7 +114,11 @@ exports.getVendorCases = async (req, res) => {
         };
         
         if (status && status !== 'all') {
-            where.status = status;
+            if (status === 'late_submission') {
+                where.isLateSubmission = true;
+            } else {
+                where.status = status;
+            }
         }
         
         if (search) {

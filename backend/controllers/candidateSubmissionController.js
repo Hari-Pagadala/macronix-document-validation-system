@@ -204,14 +204,20 @@ exports.submitVerification = async (req, res) => {
     });
 
     // Update record status to submitted
+    const submittedAt = new Date();
     const distanceMeters = record.gpsLat && record.gpsLng && submittedGpsLat && submittedGpsLng
       ? haversineDistanceMeters(record.gpsLat, record.gpsLng, submittedGpsLat, submittedGpsLng)
       : null;
+
+    const tatDue = record.tatDueDate ? new Date(record.tatDueDate) : null;
+    const isLateSubmission = tatDue ? submittedAt > tatDue : false;
 
     await record.update({
       status: 'submitted',
       assignedFieldOfficer: null,
       completionDate: new Date(),
+      submittedAt,
+      isLateSubmission,
       submittedGpsLat: submittedGpsLat,
       submittedGpsLng: submittedGpsLng,
       gpsDistanceMeters: distanceMeters

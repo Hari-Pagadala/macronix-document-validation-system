@@ -327,6 +327,8 @@ exports.getAllRecords = async (req, res) => {
             // For candidate_overdue, we look for candidate_assigned records with expired tokens
             if (status === 'candidate_overdue') {
                 where.status = 'candidate_assigned';
+            } else if (status === 'late_submission') {
+                where.isLateSubmission = true;
             } else {
                 where.status = status;
             }
@@ -650,6 +652,7 @@ exports.getDashboardStats = async (req, res) => {
         const insufficientRecords = await Record.count({ where: { status: 'insufficient' } });
         const rejectedRecords = await Record.count({ where: { status: 'rejected' } });
         const stoppedRecords = await Record.count({ where: { status: 'stopped' } });
+        const lateSubmissionRecords = await Record.count({ where: { isLateSubmission: true } });
         
         // Count expired candidate assignments
         const candidateAssignedRecordsList = await Record.findAll({ 
@@ -679,6 +682,7 @@ exports.getDashboardStats = async (req, res) => {
             candidateOverdueRecords,
             assignedRecords,
             submittedRecords,
+            lateSubmissionRecords,
             approvedRecords,
             insufficientRecords,
             rejectedRecords,
@@ -695,6 +699,7 @@ exports.getDashboardStats = async (req, res) => {
                 candidateOverdueRecords,
                 assignedRecords,
                 submittedRecords,
+                lateSubmissionRecords,
                 approvedRecords,
                 insufficientRecords,
                 rejectedRecords,

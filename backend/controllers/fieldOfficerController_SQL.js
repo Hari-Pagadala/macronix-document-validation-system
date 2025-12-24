@@ -605,10 +605,15 @@ exports.submitVerification = async (req, res) => {
 
         record.submittedGpsLat = resolvedGpsLat;
         record.submittedGpsLng = resolvedGpsLng;
+        const submittedAt = new Date();
+        record.submittedAt = submittedAt;
         const distanceMeters = record.gpsLat && record.gpsLng
             ? haversineDistanceMeters(record.gpsLat, record.gpsLng, resolvedGpsLat, resolvedGpsLng)
             : null;
         record.gpsDistanceMeters = distanceMeters;
+
+        const tatDue = record.tatDueDate ? new Date(record.tatDueDate) : null;
+        record.isLateSubmission = tatDue ? submittedAt > tatDue : false;
 
         if (action === 'insufficient') {
             record.status = 'insufficient';
