@@ -793,62 +793,65 @@ const ViewDetailsModal = ({ open, onClose, recordId, onStopSuccess }) => {
                   </>
                 )}
 
-                <Paper sx={{ p: 2, mb: 3, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2 }}>
-                  <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: '#0f172a' }}>
-                    📍 Location Verification
-                  </Typography>
-
-                  {!canShowMap ? (
-                    <Typography variant="body2" color="text.secondary">
-                      Location data not available
+                {/* Location Comparison Map - Only for Candidate submissions, not for FO verification */}
+                {!verification?.fieldOfficerId && (
+                  <Paper sx={{ p: 2, mb: 3, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 2 }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1, color: '#0f172a' }}>
+                      📍 Location Verification
                     </Typography>
-                  ) : (
-                    <>
-                      <Grid container spacing={2} sx={{ mb: 2 }}>
-                        <Grid item xs={12} sm={4}>
-                          <Typography variant="subtitle2" sx={{ color: '#475569', fontWeight: 600 }}>Uploaded Location</Typography>
-                          <Typography variant="body2" sx={{ color: '#0f172a' }}>{formatCoords(uploadedLat, uploadedLng)}</Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <Typography variant="subtitle2" sx={{ color: '#475569', fontWeight: 600 }}>Submitted Location</Typography>
-                          <Typography variant="body2" sx={{ color: '#0f172a' }}>{formatCoords(submittedLat, submittedLng)}</Typography>
-                        </Grid>
-                        <Grid item xs={12} sm={4}>
-                          <Typography variant="subtitle2" sx={{ color: '#475569', fontWeight: 600 }}>Distance</Typography>
-                          <Typography variant="body2" sx={{ color: distanceIsWarning ? '#c2410c' : '#0f172a', fontWeight: distanceIsWarning ? 700 : 500 }}>
-                            {formatDistance(distanceMeters)}
-                          </Typography>
-                        </Grid>
-                      </Grid>
 
-                      <Box sx={{ height: 280, borderRadius: 2, overflow: 'hidden', boxShadow: 'inset 0 0 0 1px #e2e8f0' }}>
-                        {staticMapUrl && !mapError ? (
-                          <Box
-                            component="img"
-                            src={staticMapUrl}
-                            alt="Location map"
-                            sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            onError={() => setMapError(true)}
-                          />
-                        ) : embedUrl ? (
-                          <Box component="iframe"
-                            src={embedUrl}
-                            title="Map preview"
-                            sx={{ border: 0, width: '100%', height: '100%' }}
-                            loading="lazy"
-                            allowFullScreen
-                          />
-                        ) : (
-                          <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e2e8f0', textAlign: 'center', px: 2 }}>
-                            <Typography variant="body2" color="text.secondary">
-                              Map unavailable. Uploaded: {formatCoords(uploadedLat, uploadedLng)} | Submitted: {formatCoords(submittedLat, submittedLng)}
+                    {!canShowMap ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Location data not available
+                      </Typography>
+                    ) : (
+                      <>
+                        <Grid container spacing={2} sx={{ mb: 2 }}>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="subtitle2" sx={{ color: '#475569', fontWeight: 600 }}>Uploaded Location</Typography>
+                            <Typography variant="body2" sx={{ color: '#0f172a' }}>{formatCoords(uploadedLat, uploadedLng)}</Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="subtitle2" sx={{ color: '#475569', fontWeight: 600 }}>Submitted Location</Typography>
+                            <Typography variant="body2" sx={{ color: '#0f172a' }}>{formatCoords(submittedLat, submittedLng)}</Typography>
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <Typography variant="subtitle2" sx={{ color: '#475569', fontWeight: 600 }}>Distance</Typography>
+                            <Typography variant="body2" sx={{ color: distanceIsWarning ? '#c2410c' : '#0f172a', fontWeight: distanceIsWarning ? 700 : 500 }}>
+                              {formatDistance(distanceMeters)}
                             </Typography>
-                          </Box>
-                        )}
-                      </Box>
-                    </>
-                  )}
-                </Paper>
+                          </Grid>
+                        </Grid>
+
+                        <Box sx={{ height: 280, borderRadius: 2, overflow: 'hidden', boxShadow: 'inset 0 0 0 1px #e2e8f0' }}>
+                          {staticMapUrl && !mapError ? (
+                            <Box
+                              component="img"
+                              src={staticMapUrl}
+                              alt="Location map"
+                              sx={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onError={() => setMapError(true)}
+                            />
+                          ) : embedUrl ? (
+                            <Box component="iframe"
+                              src={embedUrl}
+                              title="Map preview"
+                              sx={{ border: 0, width: '100%', height: '100%' }}
+                              loading="lazy"
+                              allowFullScreen
+                            />
+                          ) : (
+                            <Box sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e2e8f0', textAlign: 'center', px: 2 }}>
+                              <Typography variant="body2" color="text.secondary">
+                                Map unavailable. Uploaded: {formatCoords(uploadedLat, uploadedLng)} | Submitted: {formatCoords(submittedLat, submittedLng)}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      </>
+                    )}
+                  </Paper>
+                )}
                 
                 {/* Images Section - Different layout for candidate vs FO submissions */}
                 {!verification.fieldOfficerId ? (

@@ -1,4 +1,7 @@
 const { Sequelize } = require('sequelize');
+
+// Environment variables are loaded by server.js before this file is imported
+// This line is kept as a fallback if database.js is imported directly
 require('dotenv').config();
 
 const sequelize = new Sequelize(

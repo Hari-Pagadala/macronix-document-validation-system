@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "validate-env": "node validateEnvironment.js",
+    "check-config": "node validateEnvironment.js",
     "create-admin": "node createAdmin_SQL.js",
     "reset": "node createAdmin_SQL.js"
   },

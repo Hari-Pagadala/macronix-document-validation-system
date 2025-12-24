@@ -410,56 +410,60 @@ const generateCasePDF = async (record, verification, vendorName, fieldOfficerNam
       drawTable(gpsTableData, [pageWidth / 3, (pageWidth * 2) / 3]);
       doc.moveDown(1);
 
-      // Add location comparison map if both GPS coordinates available
-      const uploadedLat = record.gpsLat;
-      const uploadedLng = record.gpsLng;
-      const submittedLat = record.submittedGpsLat || verification.gpsLat;
-      const submittedLng = record.submittedGpsLng || verification.gpsLng;
+      // Add location comparison map ONLY for candidate submissions, not for FO verification
+      // (FO verifications have fieldOfficerId set; candidate submissions do not)
+      const isCandidateSubmission = !verification.fieldOfficerId;
+      
+      if (isCandidateSubmission) {
+        const uploadedLat = record.gpsLat;
+        const uploadedLng = record.gpsLng;
+        const submittedLat = record.submittedGpsLat || verification.gpsLat;
+        const submittedLng = record.submittedGpsLng || verification.gpsLng;
 
-      if (uploadedLat && uploadedLng && submittedLat && submittedLng) {
-        try {
-          const params = new URLSearchParams({
-            uploadedLat: String(uploadedLat),
-            uploadedLng: String(uploadedLng),
-            submittedLat: String(submittedLat),
-            submittedLng: String(submittedLng),
-            width: '600',
-            height: '250'
-          });
-          const localBase = `http://127.0.0.1:${process.env.PORT || 5000}`;
-          const mapUrl = `${localBase}/api/map/static?${params.toString()}`;
-          
-          if (mapUrl) {
-            console.log('[PDF] Adding location comparison map');
+        if (uploadedLat && uploadedLng && submittedLat && submittedLng) {
+          try {
+            const params = new URLSearchParams({
+              uploadedLat: String(uploadedLat),
+              uploadedLng: String(uploadedLng),
+              submittedLat: String(submittedLat),
+              submittedLng: String(submittedLng),
+              width: '600',
+              height: '250'
+            });
+            const localBase = `http://127.0.0.1:${process.env.PORT || 5000}`;
+            const mapUrl = `${localBase}/api/map/static?${params.toString()}`;
             
-            // Add map section header with blue background
-            const mapSectionY = doc.y;
-            doc.save();
-            doc.rect(leftX, mapSectionY, pageWidth, 24).fill('#0f172a');
-            doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(12);
-            doc.text('Location Comparison Map', leftX + 10, mapSectionY + 6, { width: pageWidth - 20, align: 'left' });
-            doc.restore();
-            doc.y = mapSectionY + 30;
-            
-            // Add legend below header
-            doc.fontSize(8).fillColor('#6b7280').font('Helvetica');
-            doc.text('Red marker: Uploaded location | Green marker: Submitted location', leftX, doc.y);
-            doc.moveDown(0.5);
-            
-            // Fetch and embed map image
-            await addImageToDoc(doc, mapUrl, '', leftX, pageWidth, 250);
-            doc.moveDown(1);
+            if (mapUrl) {
+              console.log('[PDF] Adding location comparison map for candidate submission');
+              
+              // Add map section header with blue background
+              const mapSectionY = doc.y;
+              doc.save();
+              doc.rect(leftX, mapSectionY, pageWidth, 24).fill('#0f172a');
+              doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(12);
+              doc.text('Location Comparison Map', leftX + 10, mapSectionY + 6, { width: pageWidth - 20, align: 'left' });
+              doc.restore();
+              doc.y = mapSectionY + 30;
+              
+              // Add legend below header
+              doc.fontSize(8).fillColor('#6b7280').font('Helvetica');
+              doc.text('Red marker: Uploaded location | Green marker: Submitted location', leftX, doc.y);
+              doc.moveDown(0.5);
+              
+              // Fetch and embed map image
+              await addImageToDoc(doc, mapUrl, '', leftX, pageWidth, 250);
+              doc.moveDown(1);
+            }
+          } catch (mapErr) {
+            console.error('[PDF] Failed to add location map:', mapErr.message);
+            // Continue without map
           }
-        } catch (mapErr) {
-          console.error('[PDF] Failed to add location map:', mapErr.message);
-          // Continue without map
         }
+      } else {
+        console.log('[PDF] Skipping location map for FO verification');
       }
 
       // Photos Section - Different labels for candidate vs FO submissions
-      
-      // Check if it's a candidate submission
-      const isCandidateSubmission = !verification.fieldOfficerId;
       
       if (isCandidateSubmission) {
         // Candidate Submission - Photo Only with Metadata

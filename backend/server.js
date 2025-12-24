@@ -1,10 +1,13 @@
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
 const path = require('path');
-const sequelize = require('./config/database');
 
-dotenv.config();
+// Load environment configuration based on NODE_ENV
+const { loadEnvironmentConfig, getEnvironmentConfig } = require('./config/environmentConfig');
+loadEnvironmentConfig();
+
+const sequelize = require('./config/database');
+const envConfig = getEnvironmentConfig();
 
 const app = express();
 
@@ -52,18 +55,27 @@ CandidateToken.belongsTo(Record, { as: 'record', foreignKey: 'recordId' });
 Record.hasMany(CandidateToken, { as: 'candidateTokens', foreignKey: 'recordId' });
 
 // Database connection and sync
-sequelize.authenticate()
-    .then(() => {
+let dbConnected = false;
+
+const initializeDatabase = async () => {
+    try {
+        await sequelize.authenticate();
         console.log('✅ PostgreSQL Connected Successfully!');
+        
         // Enable alter to evolve schema with new manual-entry fields
-        return sequelize.sync({ alter: true });
-    })
-    .then(() => {
+        await sequelize.sync({ alter: true });
         console.log('✅ Database tables synchronized!');
-    })
-    .catch(err => {
+        
+        dbConnected = true;
+    } catch (err) {
         console.error('❌ Database Connection Error:', err.message);
-    });
+        console.error('⚠️  Make sure PostgreSQL is running on localhost:5432');
+        console.error('   Try: docker-compose up -d db');
+        // Don't exit, let the app continue but routes will fail gracefully
+    }
+};
+
+initializeDatabase();
 
 // Routes
 const authRoutes = require('./routes/authRoutes');
@@ -78,17 +90,29 @@ const candidateRoutes = require('./routes/candidateRoutes');
 const mapRoutes = require('./routes/mapRoutes');
 const shortLinkRoutes = require('./routes/shortLink');
 
-app.use('/api/auth', authRoutes);
-app.use('/api/records', recordRoutes);
-app.use('/api/vendors', vendorRoutes);
-app.use('/api/field-officers', fieldOfficerRoutes);
-app.use('/api/vendor-portal', vendorPortalRoutes);
-app.use('/api/fo-portal', foPortalRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/api/download', downloadRoutes);
-app.use('/api/candidate', candidateRoutes); // Public routes for candidate submission
-app.use('/api/map', mapRoutes); // Static map image service
-app.use('/c', shortLinkRoutes); // Short link redirects
+// Database connection check middleware (for API routes that need database)
+const requireDatabase = (req, res, next) => {
+    if (!dbConnected) {
+        return res.status(503).json({
+            success: false,
+            message: 'Database connection not available. Make sure PostgreSQL is running.',
+            status: 'database_unavailable'
+        });
+    }
+    next();
+};
+
+app.use('/api/auth', requireDatabase, authRoutes);
+app.use('/api/records', requireDatabase, recordRoutes);
+app.use('/api/vendors', requireDatabase, vendorRoutes);
+app.use('/api/field-officers', requireDatabase, fieldOfficerRoutes);
+app.use('/api/vendor-portal', requireDatabase, vendorPortalRoutes);
+app.use('/api/fo-portal', requireDatabase, foPortalRoutes);
+app.use('/api/reports', requireDatabase, reportRoutes);
+app.use('/api/download', requireDatabase, downloadRoutes);
+app.use('/api/candidate', requireDatabase, candidateRoutes); // Public routes for candidate submission
+app.use('/api/map', mapRoutes); // Static map image service (doesn't need DB)
+app.use('/c', requireDatabase, shortLinkRoutes); // Short link redirects
 
 // Health check endpoints
 app.get('/', (req, res) => {
@@ -134,7 +158,7 @@ app.use((err, req, res, next) => {
     });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = envConfig.port;
 
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on http://0.0.0.0:${PORT} (accessible at http://192.168.1.16:${PORT})`);
